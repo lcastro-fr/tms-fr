@@ -2,7 +2,7 @@ name: tms-fr
 
 services:
   db:
-    image: postgis:17.5
+    image: postgis/postgis:17-3.5
     environment:
         POSTGRES_USER: ${APP_DB_USER}
         POSTGRES_PASSWORD: ${APP_DB_PASSWORD}
@@ -10,7 +10,7 @@ services:
     ports:
       - ${APP_DB_PORT}:5432
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data_gis:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER} -d ${APP_DB_NAME} -h localhost"]
       interval: 10s
@@ -45,6 +45,6 @@ services:
         condition: service_healthy
 
 volumes:
-  db_data:
+  db_data_gis:
 networks:
   backend_net:
