@@ -1,0 +1,50 @@
+name: tms-fr
+
+services:
+  db:
+    image: postgis:17.5
+    environment:
+        POSTGRES_USER: ${APP_DB_USER}
+        POSTGRES_PASSWORD: ${APP_DB_PASSWORD}
+        POSTGRES_DB: ${APP_DB_NAME}
+    ports:
+      - ${APP_DB_PORT}:5432
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER} -d ${APP_DB_NAME} -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend_net
+
+  web:
+    build:
+      context: ./backend
+    environment:
+      - APP_DB_NAME=${APP_DB_NAME}
+      - APP_DB_USER=${APP_DB_USER}
+      - APP_DB_PASSWORD=${APP_DB_PASSWORD}
+      - APP_DB_HOST=db
+      - APP_DB_PORT=5432
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=${DEBUG}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - ORS_API_KEY=${ORS_API_KEY}
+      - ORS_SNAP_RADIUS_M=${ORS_SNAP_RADIUS_M}
+      - INGEST_API_KEY=${INGEST_API_KEY}
+    networks:
+      - backend_net
+    ports:
+      - 8000:8000
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
+networks:
+  backend_net:

@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+wheels/
+*.egg-info/
+
+# Entornos y secretos
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+/staticfiles/
+/media/
+*.log
+
+# Salida generada por scripts/
+/out/
+
+# Tooling
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Node (frontend)
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Editores / SO
+.idea/
+.vscode/
+*.swp
+.DS_Store
