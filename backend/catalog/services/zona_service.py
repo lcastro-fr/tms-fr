@@ -3,10 +3,9 @@ from __future__ import annotations
 from django.contrib.gis.geos import Point, Polygon
 from django.db import IntegrityError, transaction
 
+from catalog.enums import SRID_WGS84
 from catalog.models import Ubicacion, Zona
 from shared.exceptions import BusinessRuleError, ConflictError
-
-SRID_WGS84 = 4326
 
 
 class ZonaService:

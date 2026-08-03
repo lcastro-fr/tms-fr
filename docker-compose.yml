@@ -40,6 +40,7 @@ services:
       - 8000:8000
     volumes:
       - ./backend:/app
+      - ./seed:/app/seed:ro
     depends_on:
       db:
         condition: service_healthy

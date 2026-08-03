@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from enum import StrEnum
 
+SRID_WGS84 = 4326
+
 
 class TipoUbicacion(StrEnum):
     PLANTA = "planta"
