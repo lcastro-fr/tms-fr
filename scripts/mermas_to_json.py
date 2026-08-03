@@ -229,7 +229,7 @@ def validate(payloads: list[dict[str, Any]]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=REPO_ROOT / "backend/Mermas.xlsx")
+    parser.add_argument("--input", type=Path, default=REPO_ROOT / "backend/seed/Mermas.xlsx")
     parser.add_argument("--output", type=Path, default=REPO_ROOT / "out/tickets.json")
     parser.add_argument("--planta", default="1920")
     parser.add_argument("--tz-offset", default="-03:00")

@@ -42,3 +42,7 @@ frontend/.vite/
 .vscode/
 *.swp
 .DS_Store
+
+# seed
+*.xlsx
+seed/
