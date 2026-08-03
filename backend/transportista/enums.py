@@ -10,6 +10,10 @@ class ModalidadFlete(StrEnum):
     DIRECTO = 'directo'
     MULTIPARADA = 'multiparada'
 
+    @classmethod
+    def para_destinos(cls, cantidad: int) -> ModalidadFlete:
+        return cls.DIRECTO if cantidad <= 1 else cls.MULTIPARADA
+
 class ConceptoUnidadMedida(StrEnum):
     DIA = 'dia'
     HORA = 'hora'

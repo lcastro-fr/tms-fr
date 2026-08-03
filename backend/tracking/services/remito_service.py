@@ -44,3 +44,13 @@ class RemitoService:
     @staticmethod
     def add_destino(remito: Remito, ubicacion: Ubicacion) -> RemitoDestino:
         return RemitoDestino.objects.create(remito=remito, ubicacion=ubicacion)
+
+    @staticmethod
+    def get_distinct_destinos(orden_servicio_id: int) -> list[Ubicacion]:
+        return list(
+            Ubicacion.objects.filter(
+                remitos_destino__active=True,
+                remitos_destino__remito__active=True,
+                remitos_destino__remito__orden_servicio_id=orden_servicio_id,
+            ).distinct()
+        )
