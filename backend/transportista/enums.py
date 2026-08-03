@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from catalog.enums import TIPO_CAMION_CHOICES
-
 class EstadoTarifario(StrEnum):
     VIGENTE = 'vigente'
     CERRADO = 'cerrado'
