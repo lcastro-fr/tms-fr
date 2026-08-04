@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from django.contrib.gis.geos import Point, Polygon
+from django.contrib.gis.geos import MultiPoint, Point, Polygon
 from django.db import IntegrityError, transaction
 
 from catalog.enums import SRID_WGS84
@@ -39,6 +39,16 @@ class ZonaService:
         if ubicacion.coordinates is None:
             return []
         return ZonaService.get_covering_zones(ubicacion.coordinates)
+
+    @staticmethod
+    def get_zones_covering_all(puntos: list[Point]) -> list[Zona]:
+        """
+        Zonas que cubren TODOS los puntos.
+        """
+        if not puntos:
+            return []
+        objetivo = MultiPoint(*puntos, srid=SRID_WGS84)
+        return list(Zona.objects.filter(geom__covers=objetivo))
 
     @staticmethod
     def get_zona(zona_id: int) -> Zona | None:
