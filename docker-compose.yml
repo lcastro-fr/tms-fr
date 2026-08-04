@@ -19,7 +19,7 @@ services:
     networks:
       - backend_net
 
-  web:
+  api:
     build:
       context: ./backend
     environment:
@@ -36,14 +36,40 @@ services:
       - INGEST_API_KEY=${INGEST_API_KEY}
     networks:
       - backend_net
-    ports:
-      - 8000:8000
     volumes:
       - ./backend:/app
       - ./seed:/app/seed:ro
     depends_on:
       db:
         condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+    networks:
+      - backend_net
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.pnpm-store
+    environment:
+      - CI=true
+    depends_on:
+      api:
+        condition: service_started
+
+  proxy:
+    image: nginx:latest
+    ports:
+      - 80:80
+    networks:
+      - backend_net
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      web:
+        condition: service_started
+
 
 volumes:
   db_data_gis:

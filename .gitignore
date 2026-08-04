@@ -46,3 +46,7 @@ frontend/.vite/
 # seed
 *.xlsx
 seed/
+
+# frontend
+routeTree.gen.ts
+.pnpm-store/

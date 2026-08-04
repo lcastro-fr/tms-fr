@@ -1,7 +1,8 @@
 # TMS-FR
 
 TMS (Transport Management System) para una operación de fletes en Argentina.
-Backend Django 6.0 + Postgres 17. Frontend React (todavía no existe).
+Backend Django 6.0 + Postgres 17. Frontend React en `frontend/`, con su propia
+arquitectura en `frontend/CLAUDE.md`.
 
 ## Alcance
 
