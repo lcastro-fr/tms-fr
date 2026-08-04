@@ -6,63 +6,91 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Zona',
+            name="Zona",
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('active', models.BooleanField(default=True)),
-                ('id', models.BigAutoField(primary_key=True, serialize=False)),
-                ('nombre', models.CharField(max_length=120)),
-                ('geom', django.contrib.gis.db.models.fields.MultiPolygonField(srid=4326)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("active", models.BooleanField(default=True)),
+                ("id", models.BigAutoField(primary_key=True, serialize=False)),
+                ("nombre", models.CharField(max_length=120)),
+                ("geom", django.contrib.gis.db.models.fields.MultiPolygonField(srid=4326)),
             ],
             options={
-                'verbose_name': 'Zona',
-                'verbose_name_plural': 'Zonas',
-                'db_table': 'zona',
-                'abstract': False,
-                'base_manager_name': 'all_objects',
+                "verbose_name": "Zona",
+                "verbose_name_plural": "Zonas",
+                "db_table": "zona",
+                "abstract": False,
+                "base_manager_name": "all_objects",
             },
             managers=[
-                ('objects', django.db.models.manager.Manager()),
-                ('all_objects', django.db.models.manager.Manager()),
+                ("objects", django.db.models.manager.Manager()),
+                ("all_objects", django.db.models.manager.Manager()),
             ],
         ),
         migrations.CreateModel(
-            name='Ubicacion',
+            name="Ubicacion",
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('active', models.BooleanField(default=True)),
-                ('id', models.BigAutoField(primary_key=True, serialize=False)),
-                ('tipo', models.CharField(choices=[('planta', 'Planta'), ('puerto', 'Puerto'), ('aeropuerto', 'Aeropuerto'), ('cliente', 'Cliente'), ('otro', 'Otro')], default='cliente', max_length=20)),
-                ('nombre', models.CharField(max_length=120)),
-                ('codigo', models.CharField(blank=True, max_length=20, null=True)),
-                ('calle', models.CharField(max_length=200)),
-                ('localidad', models.CharField(max_length=120)),
-                ('provincia', models.CharField(max_length=120)),
-                ('pais', models.CharField(default='Argentina', max_length=120)),
-                ('coordinates', django.contrib.gis.db.models.fields.PointField(blank=True, null=True, srid=4326)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("active", models.BooleanField(default=True)),
+                ("id", models.BigAutoField(primary_key=True, serialize=False)),
+                (
+                    "tipo",
+                    models.CharField(
+                        choices=[
+                            ("planta", "Planta"),
+                            ("puerto", "Puerto"),
+                            ("aeropuerto", "Aeropuerto"),
+                            ("cliente", "Cliente"),
+                            ("otro", "Otro"),
+                        ],
+                        default="cliente",
+                        max_length=20,
+                    ),
+                ),
+                ("nombre", models.CharField(max_length=120)),
+                ("codigo", models.CharField(blank=True, max_length=20, null=True)),
+                ("calle", models.CharField(max_length=200)),
+                ("localidad", models.CharField(max_length=120)),
+                ("provincia", models.CharField(max_length=120)),
+                ("pais", models.CharField(default="Argentina", max_length=120)),
+                (
+                    "coordinates",
+                    django.contrib.gis.db.models.fields.PointField(
+                        blank=True, null=True, srid=4326
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'ubicacion',
-                'verbose_name_plural': 'ubicaciones',
-                'db_table': 'ubicacion',
-                'abstract': False,
-                'base_manager_name': 'all_objects',
-                'indexes': [models.Index(condition=models.Q(('active', True), ('codigo__isnull', False)), fields=['codigo'], name='idx_ubicacion_codigo')],
-                'constraints': [models.UniqueConstraint(condition=models.Q(('active', True), ('codigo__isnull', False)), fields=('codigo',), name='uq_ubicacion_codigo')],
+                "verbose_name": "ubicacion",
+                "verbose_name_plural": "ubicaciones",
+                "db_table": "ubicacion",
+                "abstract": False,
+                "base_manager_name": "all_objects",
+                "indexes": [
+                    models.Index(
+                        condition=models.Q(("active", True), ("codigo__isnull", False)),
+                        fields=["codigo"],
+                        name="idx_ubicacion_codigo",
+                    )
+                ],
+                "constraints": [
+                    models.UniqueConstraint(
+                        condition=models.Q(("active", True), ("codigo__isnull", False)),
+                        fields=("codigo",),
+                        name="uq_ubicacion_codigo",
+                    )
+                ],
             },
             managers=[
-                ('objects', django.db.models.manager.Manager()),
-                ('all_objects', django.db.models.manager.Manager()),
+                ("objects", django.db.models.manager.Manager()),
+                ("all_objects", django.db.models.manager.Manager()),
             ],
         ),
     ]

@@ -9,9 +9,7 @@ NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 _COL = re.compile(r"[A-Z]+")
 
 
-def read_rows(
-    path: Path, sheet: str = "xl/worksheets/sheet1.xml"
-) -> list[dict[str, str]]:
+def read_rows(path: Path, sheet: str = "xl/worksheets/sheet1.xml") -> list[dict[str, str]]:
     """
     Lee un .xlsx y devuelve las filas de datos como dicts {encabezado: valor}.
 

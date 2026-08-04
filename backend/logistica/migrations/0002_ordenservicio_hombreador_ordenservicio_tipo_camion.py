@@ -4,20 +4,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('logistica', '0001_initial'),
+        ("logistica", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='ordenservicio',
-            name='hombreador',
+            model_name="ordenservicio",
+            name="hombreador",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='ordenservicio',
-            name='tipo_camion',
-            field=models.CharField(blank=True, choices=[('chasis', 'Chasis'), ('balancin', 'Balancin'), ('semi', 'Semi')], max_length=20, null=True),
+            model_name="ordenservicio",
+            name="tipo_camion",
+            field=models.CharField(
+                blank=True,
+                choices=[("chasis", "Chasis"), ("balancin", "Balancin"), ("semi", "Semi")],
+                max_length=20,
+                null=True,
+            ),
         ),
     ]

@@ -6,55 +6,103 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('logistica', '0003_ordenservicio_fecha_viaje'),
-        ('transportista', '0004_conceptoadicional_tipo_operacion_and_more'),
+        ("logistica", "0003_ordenservicio_fecha_viaje"),
+        ("transportista", "0004_conceptoadicional_tipo_operacion_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='ordenservicio',
-            name='tipo_operacion',
-            field=models.CharField(choices=[('carga', 'Carga'), ('camara', 'Camara')], default='carga', max_length=20),
+            model_name="ordenservicio",
+            name="tipo_operacion",
+            field=models.CharField(
+                choices=[("carga", "Carga"), ("camara", "Camara")], default="carga", max_length=20
+            ),
         ),
         migrations.AlterField(
-            model_name='ordenservicio',
-            name='fecha_viaje',
+            model_name="ordenservicio",
+            name="fecha_viaje",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.CreateModel(
-            name='CostoOrdenServicio',
+            name="CostoOrdenServicio",
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('active', models.BooleanField(default=True)),
-                ('id', models.BigAutoField(primary_key=True, serialize=False)),
-                ('precio_flete', models.DecimalField(decimal_places=2, max_digits=14)),
-                ('dias', models.PositiveIntegerField()),
-                ('precio_dia', models.DecimalField(blank=True, decimal_places=2, max_digits=14, null=True)),
-                ('tipo_operacion', models.CharField(choices=[('carga', 'Carga'), ('camara', 'Camara')], max_length=20)),
-                ('modalidad', models.CharField(blank=True, choices=[('directo', 'Directo'), ('multiparada', 'Multiparada')], max_length=20, null=True)),
-                ('tipo_camion', models.CharField(blank=True, max_length=20, null=True)),
-                ('hombreador', models.BooleanField()),
-                ('cantidad_destinos', models.PositiveIntegerField()),
-                ('fecha_viaje', models.DateTimeField()),
-                ('orden_servicio', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='costos', to='logistica.ordenservicio')),
-                ('tarifa_concepto', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='costos', to='transportista.tarifaconceptoadicional')),
-                ('tarifa_flete', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='costos', to='transportista.tarifaflete')),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("active", models.BooleanField(default=True)),
+                ("id", models.BigAutoField(primary_key=True, serialize=False)),
+                ("precio_flete", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("dias", models.PositiveIntegerField()),
+                (
+                    "precio_dia",
+                    models.DecimalField(blank=True, decimal_places=2, max_digits=14, null=True),
+                ),
+                (
+                    "tipo_operacion",
+                    models.CharField(
+                        choices=[("carga", "Carga"), ("camara", "Camara")], max_length=20
+                    ),
+                ),
+                (
+                    "modalidad",
+                    models.CharField(
+                        blank=True,
+                        choices=[("directo", "Directo"), ("multiparada", "Multiparada")],
+                        max_length=20,
+                        null=True,
+                    ),
+                ),
+                ("tipo_camion", models.CharField(blank=True, max_length=20, null=True)),
+                ("hombreador", models.BooleanField()),
+                ("cantidad_destinos", models.PositiveIntegerField()),
+                ("fecha_viaje", models.DateTimeField()),
+                (
+                    "orden_servicio",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="costos",
+                        to="logistica.ordenservicio",
+                    ),
+                ),
+                (
+                    "tarifa_concepto",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="costos",
+                        to="transportista.tarifaconceptoadicional",
+                    ),
+                ),
+                (
+                    "tarifa_flete",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="costos",
+                        to="transportista.tarifaflete",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Costo de Orden de Servicio',
-                'verbose_name_plural': 'Costos de Ordenes de Servicio',
-                'db_table': 'costo_orden_servicio',
-                'ordering': ['-created_at'],
-                'abstract': False,
-                'base_manager_name': 'all_objects',
-                'constraints': [models.UniqueConstraint(condition=models.Q(('active', True)), fields=('orden_servicio',), name='uq_costo_orden_servicio_active')],
+                "verbose_name": "Costo de Orden de Servicio",
+                "verbose_name_plural": "Costos de Ordenes de Servicio",
+                "db_table": "costo_orden_servicio",
+                "ordering": ["-created_at"],
+                "abstract": False,
+                "base_manager_name": "all_objects",
+                "constraints": [
+                    models.UniqueConstraint(
+                        condition=models.Q(("active", True)),
+                        fields=("orden_servicio",),
+                        name="uq_costo_orden_servicio_active",
+                    )
+                ],
             },
             managers=[
-                ('objects', django.db.models.manager.Manager()),
-                ('all_objects', django.db.models.manager.Manager()),
+                ("objects", django.db.models.manager.Manager()),
+                ("all_objects", django.db.models.manager.Manager()),
             ],
         ),
     ]

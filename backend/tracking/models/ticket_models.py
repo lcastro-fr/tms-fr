@@ -10,9 +10,7 @@ from shared.models import BaseModel
 class Ticket(BaseModel):
     id = models.BigAutoField(primary_key=True)
     numero = models.CharField(max_length=20)
-    planta = models.ForeignKey(
-        Ubicacion, on_delete=models.PROTECT, related_name="tickets"
-    )
+    planta = models.ForeignKey(Ubicacion, on_delete=models.PROTECT, related_name="tickets")
     orden_servicio = models.ForeignKey(
         OrdenServicio, on_delete=models.PROTECT, related_name="tickets"
     )

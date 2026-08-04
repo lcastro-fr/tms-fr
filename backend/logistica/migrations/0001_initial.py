@@ -6,35 +6,48 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('catalog', '0001_initial'),
-        ('transportista', '0001_initial'),
+        ("catalog", "0001_initial"),
+        ("transportista", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='OrdenServicio',
+            name="OrdenServicio",
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('active', models.BooleanField(default=True)),
-                ('id', models.BigAutoField(primary_key=True, serialize=False)),
-                ('origen', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='ordenes_servicio', to='catalog.ubicacion')),
-                ('transportista', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='ordenes_servicio', to='transportista.transportista')),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("active", models.BooleanField(default=True)),
+                ("id", models.BigAutoField(primary_key=True, serialize=False)),
+                (
+                    "origen",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="ordenes_servicio",
+                        to="catalog.ubicacion",
+                    ),
+                ),
+                (
+                    "transportista",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="ordenes_servicio",
+                        to="transportista.transportista",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Orden de Servicio',
-                'verbose_name_plural': 'Ordenes de Servicio',
-                'db_table': 'orden_servicio',
-                'abstract': False,
-                'base_manager_name': 'all_objects',
+                "verbose_name": "Orden de Servicio",
+                "verbose_name_plural": "Ordenes de Servicio",
+                "db_table": "orden_servicio",
+                "abstract": False,
+                "base_manager_name": "all_objects",
             },
             managers=[
-                ('objects', django.db.models.manager.Manager()),
-                ('all_objects', django.db.models.manager.Manager()),
+                ("objects", django.db.models.manager.Manager()),
+                ("all_objects", django.db.models.manager.Manager()),
             ],
         ),
     ]

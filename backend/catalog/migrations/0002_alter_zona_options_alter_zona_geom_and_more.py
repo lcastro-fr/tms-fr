@@ -5,23 +5,31 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('catalog', '0001_initial'),
+        ("catalog", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='zona',
-            options={'base_manager_name': 'all_objects', 'ordering': ['nombre'], 'verbose_name': 'Zona', 'verbose_name_plural': 'Zonas'},
+            name="zona",
+            options={
+                "base_manager_name": "all_objects",
+                "ordering": ["nombre"],
+                "verbose_name": "Zona",
+                "verbose_name_plural": "Zonas",
+            },
         ),
         migrations.AlterField(
-            model_name='zona',
-            name='geom',
+            model_name="zona",
+            name="geom",
             field=django.contrib.gis.db.models.fields.PolygonField(srid=4326),
         ),
         migrations.AddConstraint(
-            model_name='zona',
-            constraint=models.UniqueConstraint(condition=models.Q(('active', True)), fields=('nombre',), name='uq_zona_nombre_active'),
+            model_name="zona",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("active", True)),
+                fields=("nombre",),
+                name="uq_zona_nombre_active",
+            ),
         ),
     ]

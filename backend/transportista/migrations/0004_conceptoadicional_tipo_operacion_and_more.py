@@ -4,19 +4,27 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('transportista', '0003_remove_tarifario_uq_tarifario_transpo_vig_and_more'),
+        ("transportista", "0003_remove_tarifario_uq_tarifario_transpo_vig_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='conceptoadicional',
-            name='tipo_operacion',
-            field=models.CharField(blank=True, choices=[('carga', 'Carga'), ('camara', 'Camara')], max_length=20, null=True),
+            model_name="conceptoadicional",
+            name="tipo_operacion",
+            field=models.CharField(
+                blank=True,
+                choices=[("carga", "Carga"), ("camara", "Camara")],
+                max_length=20,
+                null=True,
+            ),
         ),
         migrations.AddConstraint(
-            model_name='conceptoadicional',
-            constraint=models.UniqueConstraint(condition=models.Q(('active', True), ('tipo_operacion__isnull', False)), fields=('tipo_operacion',), name='uq_concepto_adicional_tipo_operacion'),
+            model_name="conceptoadicional",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("active", True), ("tipo_operacion__isnull", False)),
+                fields=("tipo_operacion",),
+                name="uq_concepto_adicional_tipo_operacion",
+            ),
         ),
     ]

@@ -12,10 +12,12 @@ class TipoUbicacion(StrEnum):
     CLIENTE = "cliente"
     OTRO = "otro"
 
+
 class TipoCamion(StrEnum):
     CHASIS = "chasis"
     BALANCIN = "balancin"
     SEMI = "semi"
+
 
 TIPO_UBICACION_CHOICES = [(t.value, t.name.title()) for t in TipoUbicacion]
 TIPO_CAMION_CHOICES = [(t.value, t.name.title()) for t in TipoCamion]

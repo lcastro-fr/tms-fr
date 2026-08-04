@@ -33,9 +33,7 @@ class Remito(BaseModel):
 
 class RemitoDestino(BaseModel):
     id = models.BigAutoField(primary_key=True)
-    remito = models.ForeignKey(
-        Remito, on_delete=models.CASCADE, related_name="destinos"
-    )
+    remito = models.ForeignKey(Remito, on_delete=models.CASCADE, related_name="destinos")
     ubicacion = models.ForeignKey(
         Ubicacion, on_delete=models.PROTECT, related_name="remitos_destino"
     )

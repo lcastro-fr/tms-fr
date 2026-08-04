@@ -175,10 +175,14 @@ def build_payloads(
                 "numero": numero,
                 "planta_codigo": planta,
                 "fecha_ingreso": iso(
-                    to_datetime(head.get(COL_FECHA_INGRESO), head.get(COL_HORA_INGRESO), tz)
+                    to_datetime(
+                        head.get(COL_FECHA_INGRESO), head.get(COL_HORA_INGRESO), tz
+                    )
                 ),
                 "fecha_egreso": iso(
-                    to_datetime(head.get(COL_FECHA_SALIDA), head.get(COL_HORA_SALIDA), tz)
+                    to_datetime(
+                        head.get(COL_FECHA_SALIDA), head.get(COL_HORA_SALIDA), tz
+                    )
                 ),
                 "transportista": {
                     "cuit": head.get(COL_CUIT, ""),
@@ -229,7 +233,9 @@ def validate(payloads: list[dict[str, Any]]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=REPO_ROOT / "backend/seed/Mermas.xlsx")
+    parser.add_argument(
+        "--input", type=Path, default=REPO_ROOT / "backend/seed/Mermas.xlsx"
+    )
     parser.add_argument("--output", type=Path, default=REPO_ROOT / "out/tickets.json")
     parser.add_argument("--planta", default="1920")
     parser.add_argument("--tz-offset", default="-03:00")

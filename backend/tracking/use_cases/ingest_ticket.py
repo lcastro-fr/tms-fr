@@ -50,9 +50,7 @@ class IngestTicketUseCase:
                 )
             except RemitoService.RemitoAlreadyExistsError as exc:
                 logger.warning("Se omite el remito %s: %s", remito.numero, exc.message)
-                omitidos.append(
-                    RemitoOmitidoOut(numero=remito.numero, motivo=exc.message)
-                )
+                omitidos.append(RemitoOmitidoOut(numero=remito.numero, motivo=exc.message))
                 continue
 
             creados.append(remito.numero)

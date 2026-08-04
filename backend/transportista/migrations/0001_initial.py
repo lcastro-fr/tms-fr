@@ -5,34 +5,38 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Transportista',
+            name="Transportista",
             fields=[
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('active', models.BooleanField(default=True)),
-                ('id', models.BigAutoField(primary_key=True, serialize=False)),
-                ('cuit', models.CharField(max_length=13)),
-                ('razon_social', models.CharField(max_length=200)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("active", models.BooleanField(default=True)),
+                ("id", models.BigAutoField(primary_key=True, serialize=False)),
+                ("cuit", models.CharField(max_length=13)),
+                ("razon_social", models.CharField(max_length=200)),
             ],
             options={
-                'verbose_name': 'transportista',
-                'verbose_name_plural': 'transportistas',
-                'db_table': 'transportista',
-                'abstract': False,
-                'base_manager_name': 'all_objects',
-                'constraints': [models.UniqueConstraint(condition=models.Q(('active', True)), fields=('cuit',), name='uq_carrier_active_cuit')],
+                "verbose_name": "transportista",
+                "verbose_name_plural": "transportistas",
+                "db_table": "transportista",
+                "abstract": False,
+                "base_manager_name": "all_objects",
+                "constraints": [
+                    models.UniqueConstraint(
+                        condition=models.Q(("active", True)),
+                        fields=("cuit",),
+                        name="uq_carrier_active_cuit",
+                    )
+                ],
             },
             managers=[
-                ('objects', django.db.models.manager.Manager()),
-                ('all_objects', django.db.models.manager.Manager()),
+                ("objects", django.db.models.manager.Manager()),
+                ("all_objects", django.db.models.manager.Manager()),
             ],
         ),
     ]

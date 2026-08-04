@@ -41,10 +41,7 @@ def _apply_soft_delete(
             querysets = []
             objs = []
             for instances in instances_list:
-                if (
-                    isinstance(instances, models.QuerySet)
-                    and instances._result_cache is None
-                ):
+                if isinstance(instances, models.QuerySet) and instances._result_cache is None:
                     querysets.append(instances)
                 else:
                     objs.extend(instances)
@@ -71,12 +68,7 @@ def _apply_soft_delete(
             pks = {obj.pk for obj in instances}
             if not pks:
                 continue
-            count = (
-                model._base_manager.using(using)
-                .filter(pk__in=pks)
-                .actives()
-                .update(**soft)
-            )
+            count = model._base_manager.using(using).filter(pk__in=pks).actives().update(**soft)
             if count:
                 counter[model._meta.label] += count
 
@@ -122,7 +114,6 @@ BaseManager = models.Manager.from_queryset(ActivosQuerySet)
 
 
 class ActivesManager(BaseManager):
-
     def get_queryset(self) -> ActivosQuerySet:
         return super().get_queryset().actives()
 

@@ -4,32 +4,35 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('transportista', '0002_conceptoadicional_tarifario_tarifaflete_and_more'),
+        ("transportista", "0002_conceptoadicional_tarifario_tarifaflete_and_more"),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='tarifario',
-            name='uq_tarifario_transpo_vig',
+            model_name="tarifario",
+            name="uq_tarifario_transpo_vig",
         ),
         migrations.AlterField(
-            model_name='tarifario',
-            name='vigente_desde',
+            model_name="tarifario",
+            name="vigente_desde",
             field=models.DateTimeField(),
         ),
         migrations.AlterField(
-            model_name='tarifario',
-            name='vigente_hasta',
+            model_name="tarifario",
+            name="vigente_hasta",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddConstraint(
-            model_name='tarifario',
-            constraint=models.UniqueConstraint(condition=models.Q(('active', True), ('vigente_hasta', None)), fields=('transportista',), name='uq_tarifario_transpo_vig'),
+            model_name="tarifario",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("active", True), ("vigente_hasta", None)),
+                fields=("transportista",),
+                name="uq_tarifario_transpo_vig",
+            ),
         ),
         migrations.RemoveField(
-            model_name='tarifario',
-            name='estado',
+            model_name="tarifario",
+            name="estado",
         ),
     ]
