@@ -5,9 +5,7 @@ from catalog.models import Ubicacion, Zona
 from shared.models import BaseModel
 from transportista.enums import (
     CONCEPTO_UNIDAD_MEDIDA_CHOICES,
-    ESTADO_TARIFARIO_CHOICES,
     MODALIDAD_FLETE_CHOICES,
-    EstadoTarifario,
 )
 
 from .transportista_models import Transportista
@@ -18,11 +16,8 @@ class Tarifario(BaseModel):
     transportista = models.ForeignKey(
         Transportista, on_delete=models.PROTECT, related_name="tarifarios"
     )
-    vigente_desde = models.DateField()
-    vigente_hasta = models.DateField(null=True, blank=True)
-    estado = models.CharField(
-        max_length=20, choices=ESTADO_TARIFARIO_CHOICES, default=EstadoTarifario.VIGENTE.value
-    )
+    vigente_desde = models.DateTimeField()
+    vigente_hasta = models.DateTimeField(null=True, blank=True)
 
     class Meta(BaseModel.Meta):
         db_table = "tarifario"
@@ -33,7 +28,7 @@ class Tarifario(BaseModel):
             models.UniqueConstraint(
                 fields=["transportista"],
                 name="uq_tarifario_transpo_vig",
-                condition=models.Q(estado=EstadoTarifario.VIGENTE.value, active=True),
+                condition=models.Q(vigente_hasta=None, active=True),
             )
         ]
 

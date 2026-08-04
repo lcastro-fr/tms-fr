@@ -6,7 +6,6 @@ from django.db import transaction
 from django.db.models import Q
 
 from shared.exceptions import BusinessRuleError, ConflictError, NotFoundError
-from transportista.enums import EstadoTarifario
 from transportista.models import Tarifario, Transportista
 
 
@@ -20,11 +19,6 @@ class TarifarioService:
     class TarifarioSolapadoError(ConflictError):
         pass
 
-    @staticmethod
-    def _estado_para(vigente_hasta: date | None) -> str:
-        if vigente_hasta is None:
-            return EstadoTarifario.VIGENTE.value
-        return EstadoTarifario.CERRADO.value
 
     @staticmethod
     def _check_vigencia(vigente_desde: date, vigente_hasta: date | None) -> None:
@@ -90,7 +84,6 @@ class TarifarioService:
                 transportista_id=transportista_id,
                 vigente_desde=vigente_desde,
                 vigente_hasta=vigente_hasta,
-                estado=TarifarioService._estado_para(vigente_hasta),
             )
 
     @staticmethod
@@ -106,6 +99,5 @@ class TarifarioService:
                 excluir_id=tarifario.id,
             )
             tarifario.vigente_hasta = vigente_hasta
-            tarifario.estado = TarifarioService._estado_para(vigente_hasta)
-            tarifario.save(update_fields=["vigente_hasta", "estado", "updated_at"])
+            tarifario.save(update_fields=["vigente_hasta", "updated_at"])
             return tarifario
