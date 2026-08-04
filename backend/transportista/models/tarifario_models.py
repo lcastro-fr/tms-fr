@@ -33,6 +33,9 @@ class Tarifario(BaseModel):
             )
         ]
 
+    def __str__(self):
+        return f"{self.transportista} - {self.vigente_desde.date()} a {self.vigente_hasta.date() if self.vigente_hasta else 'vigente'}"
+
 
 class TarifaFlete(BaseModel):
     id = models.BigAutoField(primary_key=True)
@@ -74,6 +77,9 @@ class TarifaFlete(BaseModel):
             ),
         ]
 
+    def __str__(self):
+        return f"{self.tarifario} - {self.modalidad} - {self.tipo_camion}"
+
 
 class ConceptoAdicional(BaseModel):
     id = models.BigAutoField(primary_key=True)
@@ -102,6 +108,9 @@ class ConceptoAdicional(BaseModel):
             ),
         ]
 
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}"
+
 
 class TarifaConceptoAdicional(BaseModel):
     id = models.BigAutoField(primary_key=True)
@@ -125,3 +134,6 @@ class TarifaConceptoAdicional(BaseModel):
                 condition=models.Q(active=True),
             )
         ]
+
+    def __str__(self):
+        return f"{self.tarifario} - {self.concepto}"

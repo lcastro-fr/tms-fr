@@ -50,3 +50,5 @@ logs/*
 .env
 .env.local
 .env.*.local
+
+seed/
