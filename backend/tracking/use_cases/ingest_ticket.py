@@ -26,6 +26,7 @@ class IngestTicketUseCase:
         orden_servicio = OrdenServicioService.create_orden_servicio(
             origen_id=planta.id,
             transportista_id=transportista.id,
+            fecha_viaje=data.fecha_ingreso,
         )
 
         creados: list[str] = []

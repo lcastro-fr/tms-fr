@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from django.conf import settings
 
 from catalog.enums import TipoUbicacion
 from catalog.models import Ubicacion
@@ -14,6 +17,9 @@ class TicketService:
         pass
 
     class TicketAlreadyExistsError(ConflictError):
+        pass
+
+    class TicketSinEgresoError(BusinessRuleError):
         pass
 
     @staticmethod
@@ -31,6 +37,26 @@ class TicketService:
                 f"Ubicación {ubicacion} no es de tipo PLANTA",
                 detail={"ubicacion": str(ubicacion), "tipo": ubicacion.tipo},
             )
+
+    @staticmethod
+    def get_dias_permanencia(orden_servicio_id: int) -> int:
+        """
+        Días cobrables de permanencia de los tickets de una orden de servicio. La estadia empieza cuando cambia el dia.
+        """
+        tz = ZoneInfo(settings.TZ_OPERACION)
+        tickets = Ticket.objects.filter(orden_servicio_id=orden_servicio_id)
+
+        dias = 0
+        for ticket in tickets:
+            if ticket.fecha_egreso is None:
+                raise TicketService.TicketSinEgresoError(
+                    f"El ticket {ticket.numero} no tiene fecha_egreso, no se puede costear",
+                    detail={"ticket": ticket.numero},
+                )
+            ingreso = ticket.fecha_ingreso.astimezone(tz).date()
+            egreso = ticket.fecha_egreso.astimezone(tz).date()
+            dias += (egreso - ingreso).days
+        return dias
 
     @staticmethod
     def create_ticket(

@@ -8,8 +8,13 @@ from django.db.models import Q
 from catalog.models import Ubicacion
 from catalog.services import ZonaService
 from shared.exceptions import BusinessRuleError, ConflictError, NotFoundError
-from transportista.enums import ModalidadFlete
-from transportista.models import TarifaFlete, Tarifario, Transportista
+from transportista.enums import ConceptoUnidadMedida, ModalidadFlete
+from transportista.models import (
+    TarifaConceptoAdicional,
+    TarifaFlete,
+    Tarifario,
+    Transportista,
+)
 
 
 class TarifarioService:
@@ -38,6 +43,9 @@ class TarifarioService:
         pass
 
     class TarifaAmbiguaError(ConflictError):
+        pass
+
+    class UnidadConceptoInvalidaError(BusinessRuleError):
         pass
 
     @staticmethod
@@ -250,3 +258,31 @@ class TarifarioService:
                 detail={"tarifario_id": clave["tarifario"].id, "zonas": nombres},
             )
         return tarifas[0]
+
+    @staticmethod
+    def get_tarifa_concepto(
+        tarifario: Tarifario, tipo_operacion: str
+    ) -> TarifaConceptoAdicional | None:
+        """
+        Precio por día del concepto que corresponde a un tipo de operación.
+        """
+        tarifa = (
+            TarifaConceptoAdicional.objects.filter(
+                tarifario=tarifario, concepto__tipo_operacion=tipo_operacion
+            )
+            .select_related("concepto")
+            .first()
+        )
+        if tarifa is None:
+            return None
+
+        if tarifa.concepto.unidad != ConceptoUnidadMedida.DIA.value:
+            raise TarifarioService.UnidadConceptoInvalidaError(
+                f"El concepto {tarifa.concepto.codigo} está en {tarifa.concepto.unidad}, "
+                f"y el cálculo de estadía es por día",
+                detail={
+                    "concepto": tarifa.concepto.codigo,
+                    "unidad": tarifa.concepto.unidad,
+                },
+            )
+        return tarifa

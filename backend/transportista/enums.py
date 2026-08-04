@@ -15,5 +15,10 @@ class ConceptoUnidadMedida(StrEnum):
     DIA = 'dia'
     HORA = 'hora'
 
+class TipoOperacion(StrEnum):
+    CARGA = 'carga'
+    CAMARA = 'camara'
+
 MODALIDAD_FLETE_CHOICES = [(m.value, m.name.title()) for m in ModalidadFlete]
 CONCEPTO_UNIDAD_MEDIDA_CHOICES = [(u.value, u.name.title()) for u in ConceptoUnidadMedida]
+TIPO_OPERACION_CHOICES = [(t.value, t.name.title()) for t in TipoOperacion]

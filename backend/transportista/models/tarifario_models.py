@@ -6,6 +6,7 @@ from shared.models import BaseModel
 from transportista.enums import (
     CONCEPTO_UNIDAD_MEDIDA_CHOICES,
     MODALIDAD_FLETE_CHOICES,
+    TIPO_OPERACION_CHOICES,
 )
 
 from .transportista_models import Transportista
@@ -79,6 +80,9 @@ class ConceptoAdicional(BaseModel):
     codigo = models.CharField(max_length=20)
     nombre = models.CharField(max_length=100)
     unidad = models.CharField(max_length=20, choices=CONCEPTO_UNIDAD_MEDIDA_CHOICES)
+    tipo_operacion = models.CharField(  # noqa: DJ001
+        max_length=20, choices=TIPO_OPERACION_CHOICES, null=True, blank=True
+    )
 
     class Meta(BaseModel.Meta):
         db_table = "concepto_adicional"
@@ -90,7 +94,12 @@ class ConceptoAdicional(BaseModel):
                 fields=["codigo"],
                 name="uq_concepto_adicional_codigo",
                 condition=models.Q(active=True),
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["tipo_operacion"],
+                name="uq_concepto_adicional_tipo_operacion",
+                condition=models.Q(tipo_operacion__isnull=False, active=True),
+            ),
         ]
 
 

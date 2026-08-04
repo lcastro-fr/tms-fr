@@ -131,6 +131,8 @@ ORS_SNAP_RADIUS_M = config("ORS_SNAP_RADIUS_M", default=350, cast=int)
 # Sin valor, el endpoint de ingesta rechaza todo.
 INGEST_API_KEY = config("INGEST_API_KEY", default="")
 
+TZ_OPERACION = config("TZ_OPERACION", default="America/Argentina/Buenos_Aires")
+
 
 # Logging
 
