@@ -67,6 +67,32 @@ el proyecto y no hace falta.
 `STATIC_URL` es `api/static/` y no `static/`, a propósito: así los estáticos del admin
 caen dentro del `location /api/` del proxy y se sirven sin agregar una regla más.
 
+## Los contenedores corren con el uid del host
+
+`api` y `web` van con `user: "${DOCKER_UID}:${DOCKER_GID}"`. Sin eso, todo lo que el
+contenedor escribe en los bind mounts (`__pycache__`, `.ruff_cache`, `.mypy_cache`,
+`node_modules`, migraciones nuevas) queda `root:root` en el repo y después hace falta
+`sudo` para borrarlo. Las dos variables están en el `.env`, y `run-dev.sh` además las
+exporta desde `id -u`/`id -g`.
+
+Que el proceso corra con otro uid obliga a que **nada que el contenedor necesite escribir
+viva en una ruta que armó el build como root**. De ahí tres decisiones en los Dockerfile:
+
+- El venv del backend va a `/opt/venv` (`UV_PROJECT_ENVIRONMENT`), fuera de `/app`, y el
+  cache de uv del build se borra para que el uid del host recree el suyo. `UV_NO_SYNC=1`
+  evita que `uv run` intente mutar un venv que no le pertenece.
+- El `node_modules` del frontend es un volumen anónimo, y queda `a+rwX` en la imagen
+  porque el volumen hereda esos permisos al crearse.
+- El `web` arranca `node_modules/.bin/vite --host` en vez de `pnpm dev`: pnpm revalida
+  dependencias en cada arranque, y como exige que su store esté en el **mismo filesystem
+  que el proyecto**, con `/app` bind-mounteado cae a `/app/.pnpm-store` e intenta
+  reinstalar. Las dependencias las instala el build; agregar una pide
+  `docker compose build web`.
+
+Si venís de antes de este cambio, los volúmenes anónimos viejos conservan su ownership
+root: hay que recrearlos una vez con
+`docker compose up -d --force-recreate --renew-anon-volumes`.
+
 ## Variables de entorno
 
 El `.env` vive en la raíz. `AutoConfig` de decouple lo busca desde `REPO_ROOT`.
@@ -130,9 +156,13 @@ Los de cada capa están en su documento. Estos cruzan las dos:
 - **`nginx.conf` no manda los headers de upgrade a WebSocket** en `location /`, así que
   el HMR de Vite no funciona a través del puerto 80. Falta `proxy_http_version 1.1` más
   `Upgrade` / `Connection`.
-- **Ningún servicio de compose mapea `DOCKER_UID`/`DOCKER_GID`.** Lo que escriban los
-  contenedores en los bind mounts `./backend` y `./frontend` queda con el owner de la
-  imagen. Es el problema de archivos root-owned que ya se había resuelto una vez.
+- **`backend/seed/` reaparece como `root:root`.** Es el punto de montaje de
+  `./seed:/app/seed:ro`, un mount anidado dentro del bind mount de `/app`, y Docker crea
+  ese directorio como root sin importar el `user:`. Queda siempre tapado por el mount, así
+  que es cosmético.
+- **El Node del host puede ser demasiado viejo para el frontend.** Vite 8 pide
+  `^20.19 || >=22.12`. El contenedor `web` usa `node:24-slim` y cumple, pero si el host
+  tiene menos que eso, `pnpm dev/build/test` sólo corren adentro del contenedor.
 - **No hay `.env.example`**, aunque el arranque lo asumía (`cp .env.example .env`).
 - **Cero tests en todo el repo.** Ni backend ni frontend: no hay `conftest.py`, ningún
   `test_*.py` y ningún runner en el frontend.

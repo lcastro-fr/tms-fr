@@ -213,12 +213,19 @@ Antes de commitear: `uv run manage.py makemigrations --check --dry-run`.
 Corriendo así, en el host, decouple sí lee el `.env` de la raíz completo (adentro del
 contenedor no; ver `../CLAUDE.md`).
 
-La alternativa, sin instalar nada, es trabajar adentro del contenedor:
+La alternativa, sin instalar nada, es trabajar adentro del contenedor, que corre con el
+uid del host (ver `../CLAUDE.md`) así que no deja archivos root-owned:
 
 ```bash
-docker compose exec api uv run manage.py migrate
-docker compose exec api uv run pytest
+docker compose exec api python manage.py migrate
+docker compose exec api pytest
+docker compose exec api ruff check --fix
+docker compose exec api mypy .
 ```
+
+El venv de la imagen está en `/opt/venv` y su `bin/` va primero en el `PATH`, así que los
+comandos se llaman directo. `uv run` también funciona, con `UV_NO_SYNC=1` puesto en la
+imagen: las dependencias son del build, y agregar una pide `docker compose build api`.
 
 ### Probar la ingesta a mano
 
@@ -266,10 +273,5 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
   Django rechaza todo.
 - **No hay `STATIC_ROOT` ni `collectstatic`.** Los estáticos del admin se sirven sólo con
   `runserver` en DEBUG.
-- **El venv del contenedor cae adentro del bind mount.** El `Dockerfile` hace `uv sync`
-  con `WORKDIR /app` y no setea `UV_PROJECT_ENVIRONMENT`, así que el venv de la imagen es
-  `/app/.venv` — y `./backend:/app` lo tapa con el del host en runtime. O sea que el
-  contenedor termina usando el venv que se armó afuera, con las librerías nativas de
-  afuera. Ponerlo en `/opt/venv` (fuera del mount) lo resuelve.
 - `routing/` está vacío (ni `__init__.py`) esperando el paso 4. Las credenciales de ORS
   (`ORS_API_KEY`, `ORS_SNAP_RADIUS_M`) ya están en settings y en compose.

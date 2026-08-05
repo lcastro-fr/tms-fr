@@ -22,6 +22,7 @@ services:
   api:
     build:
       context: ./backend
+    user: "${DOCKER_UID}:${DOCKER_GID}"
     environment:
       - APP_DB_NAME=${APP_DB_NAME}
       - APP_DB_USER=${APP_DB_USER}
@@ -38,7 +39,6 @@ services:
       - backend_net
     volumes:
       - ./backend:/app
-      - ./seed:/app/seed:ro
     depends_on:
       db:
         condition: service_healthy
@@ -46,12 +46,12 @@ services:
   web:
     build:
       context: ./frontend
+    user: "${DOCKER_UID}:${DOCKER_GID}"
     networks:
       - backend_net
     volumes:
       - ./frontend:/app
       - /app/node_modules
-      - /app/.pnpm-store
     environment:
       - CI=true
     depends_on:

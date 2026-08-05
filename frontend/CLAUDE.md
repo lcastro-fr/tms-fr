@@ -106,6 +106,9 @@ sin mensaje. Con ellos no hace falta ningún helper para leer cookies.
   una URL.
 - **La barra final importa.** `/zonas/` la necesita: con `APPEND_SLASH` un GET sin barra
   redirige 301 y un POST sin barra falla.
+- **Los tipos generados no siempre dicen toda la verdad.** `TicketIngestOut.completo`, por
+  ejemplo, no viaja en el JSON: es un `@property` de Python y no un `@computed_field`, así
+  que se deriva acá con `remitos_omitidos.length === 0`.
 
 ### Errores
 
@@ -197,10 +200,30 @@ Todo queda en `http://localhost`: la SPA en `/`, la API en `/api/v1/`, el admin 
 y a la API se llega sólo por el proxy.
 
 ```bash
-pnpm dev            # Vite con --host (dentro del contenedor es lo que corre)
+pnpm dev            # Vite con --host (es lo que corre el contenedor)
 pnpm build          # tsc -b && vite build
+pnpm typecheck      # tsc -b
+pnpm test           # vitest run
+pnpm test:watch
 pnpm lint
 ```
+
+**El toolchain necesita Node `^20.19 || >=22.12`** (lo pide Vite 8; vitest 4 pide `>=20`).
+El contenedor corre `node:24-slim` y cumple. Si el Node del host es más viejo, nada de
+esto corre afuera y hay que ir por el contenedor, que va con el uid del host (ver
+`../CLAUDE.md`) así que no deja archivos root-owned:
+
+```bash
+docker compose exec web node_modules/.bin/tsc -b
+docker compose exec web node_modules/.bin/vitest run
+docker compose exec web node_modules/.bin/eslint .
+```
+
+Se llaman los binarios directo y no `pnpm <script>` a propósito: pnpm revalida
+dependencias en cada invocación y termina peleando con su store (por eso el `CMD` de la
+imagen es `vite --host` y no `pnpm dev`; está explicado en `../CLAUDE.md`). El
+`node_modules` es un volumen anónimo armado en el build, así que **agregar una dependencia
+pide `docker compose build web`**.
 
 Regenerar los tipos de la API, con el backend levantado:
 
@@ -208,22 +231,36 @@ Regenerar los tipos de la API, con el backend levantado:
 pnpm dlx openapi-typescript http://localhost/api/v1/openapi.json -o src/api/schema.d.ts
 ```
 
-`src/routeTree.gen.ts` lo genera el plugin de router al levantar Vite y está gitignoreado.
+`src/routeTree.gen.ts` lo genera el plugin de router y **se commitea**. No está
+gitignoreado a propósito: `pnpm build` corre `tsc -b` antes que `vite build`, así que en un
+clone limpio el typecheck necesita el archivo ya presente. La alternativa era un paso
+`tsr generate` con `@tanstack/router-cli`, que además está roto por skew de versiones
+(el CLI es CJS y `router-core` ya es ESM).
+
+## Tests
+
+vitest + Testing Library, entorno `jsdom`, configurado en `vite.config.ts`.
+
+`src/test/setup.ts` mockea `matchMedia` y `ResizeObserver`: **jsdom no los implementa y
+Mantine los consulta**, así que sin esos mocks cualquier render con `MantineProvider`
+explota. Es la única razón por la que existe ese archivo.
+
+El test que hay (`src/app/providers.test.tsx`) es un smoke test del árbol de providers:
+verifica que Mantine renderice y que el `queryClient` llegue a los hijos. Es barato y
+atrapa justo lo que es silencioso cuando se rompe.
 
 ## Pendientes conocidos
 
-- **`nginx.conf` no manda los headers de upgrade a WebSocket** en `location /`, así que el
-  HMR de Vite no funciona a través del puerto 80. Falta `proxy_http_version 1.1` +
-  `Upgrade` / `Connection`.
-- **Falta `strict: true` en `tsconfig.app.json`.** El template de Vite normalmente lo
-  trae; acá no está.
-- **Falta `postcss.config.cjs` + `postcss-preset-mantine`.** Sin eso los mixins de
-  Mantine 9 (`light-dark()`, `rem()`, `smaller-than`) no compilan.
-- **`src/index.css` y `App.css` siguen siendo el CSS del template de Vite**, y su bloque
-  `prefers-color-scheme` se va a pelear con el manejo de color scheme de Mantine.
-- **No hay runner de tests.** vitest + Testing Library cuando haya un componente que lo
-  valga; MSW recién con varios features andando.
-- **`TicketIngestOut.completo` no viaja en el JSON.** Es un `@property` de pydantic, no un
-  `@computed_field`. Se deriva en el frontend: `remitos_omitidos.length === 0`.
+- **Falta la capa de API.** No existen `src/api/http.ts`, `errors.ts` ni `schema.d.ts`, así
+  que todo lo que este documento dice sobre el cliente HTTP y el data fetching es contrato,
+  no código. Es el paso siguiente, y depende de que el backend tenga API de lectura.
+- **No hay alias `@/`.** Ni en `tsconfig.app.json` (`paths`) ni en `vite.config.ts`
+  (`resolve.alias`), así que los imports entre carpetas son relativos.
+- **No hay `ColorSchemeScript`.** `MantineProvider` va con `defaultColorScheme="auto"`, y
+  sin ese script puede haber un flash del scheme equivocado al recargar. Es cosmético.
+- Skew menor de versiones: `@tanstack/router-plugin` está en 1.168 y
+  `@tanstack/react-router` en 1.170. Misma familia, conviene alinearlas.
+- **No hay MSW.** El smoke test no toca la red. Cuando haya features de verdad, hace falta
+  para testear estados de carga y error.
 - Los pendientes que cruzan las dos capas (auth para el browser, uid/gid de los bind
-  mounts, build de producción) están en `../CLAUDE.md`.
+  mounts, build de producción, versión de Node del host) están en `../CLAUDE.md`.

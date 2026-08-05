@@ -48,5 +48,4 @@ frontend/.vite/
 seed/
 
 # frontend
-routeTree.gen.ts
 .pnpm-store/
