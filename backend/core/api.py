@@ -7,8 +7,6 @@ from core.api_errors import register_exception_handlers
 from tracking.api import ordenes_router
 from tracking.api import router as tracking_router
 
-# csrf=False es correcto mientras la única auth sea por header. Pasar a True al
-# agregar auth por sesión para la SPA.
 api = NinjaAPI(
     title="TMS FR API",
     version="1.0.0",

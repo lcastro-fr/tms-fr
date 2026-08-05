@@ -1,8 +1,9 @@
 # TMS-FR — Frontend
 
 SPA React para el TMS. Consume la API del backend Django que está en `../backend`.
-Las reglas de dominio, el alcance por pasos y el contrato de la API viven en
-`../CLAUDE.md`; **leer ese primero.**
+El alcance por pasos, la topología y las convenciones que cruzan las dos capas viven en
+`../CLAUDE.md`; **leer ese primero.** La arquitectura del backend y el detalle de la API
+están en `../backend/CLAUDE.md`.
 
 Stack: React 19 + TypeScript 6 + Vite 8. Mantine 9 (core, dates, form, hooks, modals,
 notifications). TanStack Router 1 (file-based), Query 5, Table 8. axios 1. dayjs.
@@ -176,11 +177,9 @@ compartido con la integración SAP.
 
 ## Convenciones de código
 
-- **Nada de comentarios explicativos largos.** Código autoexplicativo y nombres claros.
-  Un comentario de una línea sólo si hay una restricción no obvia que avisar. El
-  razonamiento va acá, en el plan o en el commit.
-- Vocabulario de dominio en español (`Zona`, `OrdenServicio`, `numero`), técnico en
-  inglés (`queryOptions`, `ApiError`, `formatMoney`, `DataTable`).
+Las que cruzan las dos capas (comentarios, vocabulario, sufijos de DTO) están en
+`../CLAUDE.md`. Propias del frontend:
+
 - **Los campos de la API se dejan tal como llegan** (`fecha_ingreso`,
   `orden_servicio_id`). Pasarlos a camelCase obliga a una capa de mapeo que no paga.
 - Archivos `kebab-case.ts`, componentes `PascalCase.tsx`, un componente por archivo.
@@ -222,13 +221,9 @@ pnpm dlx openapi-typescript http://localhost/api/v1/openapi.json -o src/api/sche
   Mantine 9 (`light-dark()`, `rem()`, `smaller-than`) no compilan.
 - **`src/index.css` y `App.css` siguen siendo el CSS del template de Vite**, y su bloque
   `prefers-color-scheme` se va a pelear con el manejo de color scheme de Mantine.
-- **`/static/` no está proxeado**, así que el admin de Django carga sin CSS en
-  `http://localhost/admin/`.
 - **No hay runner de tests.** vitest + Testing Library cuando haya un componente que lo
   valga; MSW recién con varios features andando.
 - **`TicketIngestOut.completo` no viaja en el JSON.** Es un `@property` de pydantic, no un
   `@computed_field`. Se deriva en el frontend: `remitos_omitidos.length === 0`.
-- **Ningún servicio de compose usa `DOCKER_UID`/`DOCKER_GID`** (el `api` tampoco, aunque
-  el `CLAUDE.md` raíz diga que sí), así que lo que escriba el contenedor en el bind mount
-  `./frontend` queda con el owner de la imagen. Es el mismo problema de archivos
-  root-owned que el backend ya tuvo.
+- Los pendientes que cruzan las dos capas (auth para el browser, uid/gid de los bind
+  mounts, build de producción) están en `../CLAUDE.md`.

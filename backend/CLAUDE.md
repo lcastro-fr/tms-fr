@@ -1,0 +1,275 @@
+# TMS-FR — Backend
+
+API interna del TMS. El alcance por pasos, la topología y las convenciones que cruzan las
+dos capas viven en `../CLAUDE.md`; **leer ese primero.**
+
+Django 6.0.7 + django-ninja 1.6.2 + pydantic 2.13.4 sobre Postgres 17 / PostGIS 3.5
+(`django.contrib.gis`, backend `postgis`). Python 3.13, dependencias con `uv`.
+
+## Arquitectura
+
+```
+models/      Definición de datos. Sin lógica de negocio.
+services/    Único lugar con acceso al ORM. Clases con @staticmethod.
+use_cases/   Orquestan services. Dueños de la transacción. Reciben DTO, devuelven DTO.
+dtos/        pydantic BaseModel. El contrato con el mundo exterior.
+api.py       Adaptadores HTTP de 3 líneas. Lo único que importa ninja.
+enums.py     StrEnum + su lista *_CHOICES derivada.
+```
+
+Dependencias en una sola dirección: `api → use_cases → services → models`.
+Entre apps: `tracking → logistica → transportista`, y todos → `catalog`. Nunca al revés.
+
+### Las apps
+
+| App | Modelos | API | Notas |
+|---|---|---|---|
+| `catalog` | `Ubicacion`, `Zona` | zonas (CRUD) | Datos maestros y geo. Todos dependen de acá. |
+| `transportista` | `Transportista`, `Tarifario`, `TarifaFlete`, `ConceptoAdicional`, `TarifaConceptoAdicional` | — | Tarifarios con vigencia. Sin `use_cases/`. |
+| `logistica` | `OrdenServicio`, `CostoOrdenServicio` | — | Sin `use_cases/`: el de costo vive en `tracking`. |
+| `tracking` | `Ticket`, `Remito`, `RemitoDestino` | ingesta, costo de OS | La punta de entrada. |
+| `users` | `User` (login por email, `username = None`) | — | `AUTH_USER_MODEL`. Sólo admin. |
+
+`shared/` **no es una app**: es un paquete de soporte (`BaseModel` abstracto,
+`exceptions.py`, `dtos.py`, `xlsx.py`). `routing/` es un directorio vacío reservado para el
+paso 4 y no está en `INSTALLED_APPS`.
+
+`CalcularCostoOrdenServicioUseCase` está en `tracking/use_cases/` y devuelve un DTO de
+`logistica`. Es legal — la dirección `tracking → logistica` lo permite — pero conviene
+saberlo antes de buscarlo en `logistica/`.
+
+### Reglas duras
+
+- **El ORM vive solo en `services/`.** Ni use cases ni views hacen queries. La única
+  excepción tolerada es leer un `.id` ya cargado.
+- **Todas las vistas son sincrónicas.** Nada de `async def`. `transaction.Atomic` sólo
+  implementa `__enter__`/`__exit__`: puesto sobre un `async def`, **commitea antes de
+  que corra el cuerpo**, sin error ni warning. El ORM async de Django es un shim
+  `sync_to_async` y las transacciones no funcionan en modo async. Corremos WSGI a
+  propósito; `core/asgi.py` queda como hedge para SSE/websockets.
+- **`import ninja` sólo en `core/api*.py`, `core/auth.py` y `<app>/api.py`.** En ningún
+  otro lugar. Los DTOs son `pydantic.BaseModel`, nunca `ninja.Schema`. Services y use
+  cases nunca levantan `ninja.errors.HttpError`. Esto es lo que hace que salir de ninja
+  sea reescribir una capa fina y no el proyecto.
+- **Las transacciones son de los use cases.** Los services no abren `atomic()`, salvo
+  para envolver su propia escritura en un savepoint.
+- **Sólo se puede `catch`-and-`continue` dentro de un `@transaction.atomic` si la
+  operación que falla estaba envuelta en su propio `atomic()` anidado.** Si no, el
+  bloque queda envenenado y toda query posterior tira `TransactionManagementError`.
+- **Los use cases devuelven un DTO**, nunca un modelo ni un primitivo. El use case elige
+  el DTO; el `from_model` del DTO hace el mapeo.
+- **Nada de fallas silenciosas.** Si una ingesta descarta datos, eso va en el DTO de
+  salida (`TicketIngestOut.remitos_omitidos`), no en un `logger.warning` y listo.
+
+## La API hoy
+
+Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **seis operaciones**:
+
+| Método | Path | Entrada | Salida |
+|---|---|---|---|
+| POST | `/api/v1/tickets/ingest` | `TicketIngestIn` | 201 `TicketIngestOut` |
+| POST | `/api/v1/ordenes-servicio/{id}/costo` | — | 200 `CostoOrdenServicioOut` |
+| GET | `/api/v1/zonas/` | — | 200 `list[ZonaOut]` |
+| POST | `/api/v1/zonas/` | `ZonaIn` | 201 `ZonaOut` |
+| GET | `/api/v1/zonas/{id}` | — | 200 `ZonaOut` |
+| PUT | `/api/v1/zonas/{id}` | `ZonaIn` | 200 `ZonaOut` |
+
+Todas declaran `**ERRORS` (400/401/404/409/422/500 → `ErrorOut`) y todas van con
+`auth=IngestApiKeyAuth()`. No hay DELETE, no hay `/health`, no hay paginación y **no hay
+ningún DTO `...Filters` todavía**: `GET /zonas/` devuelve el array completo sin envelope.
+
+La barra final de `/zonas/` es obligatoria: con `APPEND_SLASH` un GET sin barra redirige
+301 y un POST sin barra falla.
+
+Docs en `/api/v1/docs`; el schema en `/api/v1/openapi.json` se importa directo en Postman
+y es la fuente de los tipos del frontend.
+
+### Formato de salida
+
+ninja hace `model_dump()` en modo python y serializa con `NinjaJSONEncoder`
+(`DjangoJSONEncoder`). Dos consecuencias que el frontend ya asume:
+
+- **`Decimal` sale como string JSON** (`"185000.00"`), no como número.
+- Los datetimes salen en ISO 8601 con `+00:00` reescrito a `Z`.
+
+Y un DTO tiene una trampa: **`TicketIngestOut.completo` no viaja en el JSON.** Es un
+`@property` de Python, no un `@computed_field` de pydantic.
+
+### Auth
+
+`core/auth.py` tiene una sola clase: `IngestApiKeyAuth(APIKeyHeader)` con
+`param_name = "X-API-Key"`, comparada con `settings.INGEST_API_KEY` vía
+`hmac.compare_digest`. Sin la variable seteada **todo devuelve 401**.
+
+Es auth machine-to-machine y nada más. No hay endpoint de login, y una sesión del admin no
+da acceso a `/api/v1/*`. Lo que hace falta para la SPA está en `../CLAUDE.md`.
+
+Sobre CSRF, para no repetir un error que ya está escrito en un comentario del código:
+ninja marca cada vista generada como `csrf_exempt` a nivel del middleware de Django, y el
+chequeo real vive **dentro de la clase de auth** — `APIKeyCookie.__init__(csrf=True)`.
+`APIKeyHeader` no chequea nada. O sea que hoy la API no tiene CSRF, y activarlo no es un
+flag de `NinjaAPI` (ese kwarg no existe en 1.6.2) sino pasar a una auth por cookie.
+
+### Excepciones
+
+`shared/exceptions.py` define `DomainError` y sus tres subtipos semánticos:
+`NotFoundError` (404), `ConflictError` (409), `BusinessRuleError` (422). Las excepciones
+anidadas de los services heredan de esos, así un solo `exception_handler` resuelve toda
+la jerarquía por MRO. Ninguna subclase sobreescribe `code`: lo que cambia es el mensaje.
+
+`core/api_errors.py` los mapea todos al mismo envelope:
+
+```json
+{"error": {"code": "conflict", "message": "...", "detail": {}}}
+```
+
+Los `code` posibles son siete: `not_found`, `conflict`, `business_rule`, `domain_error`,
+`payload_invalid` (pydantic, el único que trae `detail.errors`), `unauthorized`,
+`internal_error`.
+
+**El 422 es ambiguo en el cable** — `business_rule` y `payload_invalid` comparten status.
+Quien consuma la API ramifica por `code`.
+
+Con `DEBUG=True` el handler de 500 re-lanza, así que en dev un error no manejado devuelve
+el HTML de Django y no el envelope.
+
+No existe `ValidationError` propio: pydantic y Django ya exportan ese nombre.
+
+`DomainError` es para reglas de negocio. **Un bug no es un `DomainError`** — tiene que
+terminar en 500 con traceback, no disfrazado de 4xx.
+
+Convención: `get_*` devuelve `| None`, `get_*_or_raise` levanta.
+
+## Borrado lógico
+
+`shared.BaseModel` (`created_at`, `updated_at`, `active`) trae un framework de soft
+delete propio: `SoftDeleteCollector` reutiliza el collector de Django y hace
+`UPDATE active=False` en lugar de `DELETE`.
+
+- `objects` filtra `active=True`. `all_objects` no filtra.
+- `base_manager_name = "all_objects"` es **obligatorio**: las internals de Django (FK
+  hacia adelante, `refresh_from_db`, el collector) lo necesitan sin filtrar. Como efecto,
+  `ticket.orden_servicio` puede devolver una fila inactiva.
+- Todo `UniqueConstraint` es parcial sobre `condition=Q(active=True)`, para que una fila
+  dada de baja no bloquee recrearla.
+- **FKs: `PROTECT` cruzando agregados o hacia datos maestros (`catalog`,
+  `transportista`), `CASCADE` sólo hacia abajo dentro del mismo agregado.** Con `CASCADE`
+  hacia `catalog`, dar de baja un cliente daría de baja toda su historia.
+
+## Fechas
+
+`AwareDatetime` de punta a punta. Nunca `date` contra un `DateTimeField`: se guarda como
+medianoche UTC con sólo un `RuntimeWarning`, y el paso 2 mide duraciones. Se exige tz
+explícita en vez de adivinar — leer un naive de Buenos Aires como UTC corre todo 3 horas.
+Almacenamiento en UTC (`TIME_ZONE = "UTC"`, `USE_TZ = True`); la conversión a
+`TZ_OPERACION` va en el borde de presentación.
+
+`pytest` corre con `filterwarnings = ["error::RuntimeWarning"]` para que esto no vuelva.
+
+## Geo
+
+PostGIS de verdad, no dos floats. `Ubicacion.coordinates` es un `PointField(srid=4326)`
+con `@property latitud`/`longitud` (`.y`/`.x`), y `Zona.geom` un `PolygonField(srid=4326)`.
+
+El DTO `GeoJSONPolygon` usa orden GeoJSON, o sea **`[lng, lat]`**, no al revés. Un SRID
+distinto de 4326 se rechaza con `BusinessRuleError`.
+
+## Convenciones de código
+
+Las que cruzan las dos capas (comentarios, vocabulario, sufijos de DTO) están en
+`../CLAUDE.md`. Propias del backend:
+
+- Un modelo por archivo `*_models.py`, re-exportado en `models/__init__.py` con
+  `__all__`. Igual para `dtos/`, `services/`, `use_cases/`.
+- `db_table` explícito en snake_case. Constraints con prefijo `uq_` / `ck_` / `idx_`.
+- Los enums son `StrEnum` con su `*_CHOICES` derivada al lado, no `TextChoices`.
+- Tests contra Postgres, nunca sqlite: en sqlite `select_for_update()` es un no-op
+  silencioso, y los pasos 2 y 3 son problemas de row locking.
+- ruff con `line-length = 100` e `ignore = ["E501"]`; `ban-relative-imports = "parents"`.
+  mypy con el plugin de django-stubs y `check_untyped_defs`.
+
+## Dev loop
+
+**Correr Django en el host necesita las librerías nativas de GDAL/GEOS.** Desde que
+`django.contrib.gis` está en `INSTALLED_APPS`, sin ellas cualquier comando —hasta
+`manage.py check`— muere con `ImproperlyConfigured: Could not find the GDAL library`. El
+`Dockerfile` las instala; el host no las tiene por default:
+
+```bash
+sudo apt install binutils gdal-bin libgdal-dev libproj-dev
+```
+
+```bash
+docker compose up -d db         # desde la raíz del repo
+uv sync --group dev
+uv run manage.py migrate
+uv run manage.py runserver
+uv run pytest
+uv run ruff check --fix && uv run mypy .
+```
+
+Antes de commitear: `uv run manage.py makemigrations --check --dry-run`.
+
+Corriendo así, en el host, decouple sí lee el `.env` de la raíz completo (adentro del
+contenedor no; ver `../CLAUDE.md`).
+
+La alternativa, sin instalar nada, es trabajar adentro del contenedor:
+
+```bash
+docker compose exec api uv run manage.py migrate
+docker compose exec api uv run pytest
+```
+
+### Probar la ingesta a mano
+
+```bash
+uv run manage.py seed_demo          # crea PL01 (planta) + CL100/CL200 (destinos)
+uv run manage.py createsuperuser    # para el admin
+```
+
+También hay `import_ubicaciones`, que levanta los xlsx de `seed/` (compose los monta en
+`/app/seed:ro`) usando `shared/xlsx.py`.
+
+Con el stack completo arriba, la ingesta se dispara contra el proxy:
+
+```bash
+curl -X POST http://localhost/api/v1/tickets/ingest \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $(grep '^INGEST_API_KEY=' ../.env | cut -d= -f2)" \
+  -d '{ ... }'
+```
+
+`TicketIngestIn` pide `numero`, `planta_codigo`, `fecha_ingreso` (**con offset explícito**,
+un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
+`{numero, fecha, destinos[]}`. La forma exacta está en `/api/v1/docs`.
+
+## Pendientes conocidos
+
+- **Cero tests.** No hay `conftest.py` ni un solo `test_*.py`; los cinco `tests.py` son
+  los stubs de 3 líneas que genera Django. La config de pytest está lista y no hay nada
+  que corra. `shared/models.py` sigue siendo el código más delicado del repo y el primer
+  candidato.
+- **El management command de la ingesta programada no existe.**
+  `tracking/management/commands/` tiene sólo `__init__.py`, así que hoy la única forma de
+  disparar la ingesta es el POST. Es el paso 1 sin terminar.
+- `Remito.numero` tiene unique **global**, pero el formato argentino `0001-00000001` se
+  numera por punto de venta. Si dos plantas pueden emitir el mismo número, esto va a
+  rechazar remitos válidos. Confirmar el alcance real con SAP.
+- `OrdenServicio` sólo tiene dos FKs y algunos flags: sin número, sin estado, sin fechas
+  planificadas. El paso 3 necesita al menos estado y fechas.
+- **No hay API de lectura** de tickets, órdenes de servicio, remitos, ubicaciones ni
+  transportistas — sólo el admin. Sin eso el frontend no puede mostrar nada más que zonas.
+- **Sin paginación ni filtros.** `GET /zonas/` devuelve todas las zonas activas con su
+  polígono completo en una respuesta. Cuando haya volumen, hace falta paginar y los DTOs
+  `...Filters` que la convención ya nombra.
+- **`ALLOWED_HOSTS` tiene default vacío.** Con `DEBUG=False` y la variable sin setear,
+  Django rechaza todo.
+- **No hay `STATIC_ROOT` ni `collectstatic`.** Los estáticos del admin se sirven sólo con
+  `runserver` en DEBUG.
+- **El venv del contenedor cae adentro del bind mount.** El `Dockerfile` hace `uv sync`
+  con `WORKDIR /app` y no setea `UV_PROJECT_ENVIRONMENT`, así que el venv de la imagen es
+  `/app/.venv` — y `./backend:/app` lo tapa con el del host en runtime. O sea que el
+  contenedor termina usando el venv que se armó afuera, con las librerías nativas de
+  afuera. Ponerlo en `/opt/venv` (fuera del mount) lo resuelve.
+- `routing/` está vacío (ni `__init__.py`) esperando el paso 4. Las credenciales de ORS
+  (`ORS_API_KEY`, `ORS_SNAP_RADIUS_M`) ya están en settings y en compose.
