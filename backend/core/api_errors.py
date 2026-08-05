@@ -6,7 +6,7 @@ from typing import Any
 from django.conf import settings
 from django.http import Http404, HttpRequest
 from ninja import NinjaAPI
-from ninja.errors import AuthenticationError, ValidationError
+from ninja.errors import AuthenticationError, HttpError, ValidationError
 
 from shared.exceptions import DomainError
 
@@ -40,6 +40,22 @@ def register_exception_handlers(api: NinjaAPI) -> None:
             request,
             _body("unauthorized", "Credenciales inválidas o ausentes."),
             status=401,
+        )
+
+    # ninja levanta HttpError(403) desde APIKeyCookie cuando falla el CSRF, y trae su
+    # propio handler que responde {"detail": ...}. Sin este, gana por MRO y rompe el envelope.
+    @api.exception_handler(HttpError)
+    def http_error(request: HttpRequest, exc: HttpError):
+        if exc.status_code == 403:
+            return api.create_response(
+                request,
+                _body("forbidden", "Falló la validación de CSRF.", {"motivo": str(exc)}),
+                status=403,
+            )
+        return api.create_response(
+            request,
+            _body("http_error", str(exc)),
+            status=exc.status_code,
         )
 
     @api.exception_handler(Http404)

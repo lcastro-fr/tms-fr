@@ -4,9 +4,13 @@ import logging
 
 from django.db import transaction
 
+from catalog.enums import TipoUbicacion
 from catalog.services import UbicacionService
 from logistica.services import OrdenServicioService
-from tracking.dtos import RemitoOmitidoOut, TicketIngestIn, TicketIngestOut
+from routing.domain.exceptions import RoutingError
+from routing.domain.ports import Geocoder
+from routing.domain.values import Coordinate, GeocodeQuery
+from tracking.dtos import RemitoOmitidoOut, RemitoUbicacionIn, TicketIngestIn, TicketIngestOut
 from tracking.services import RemitoService, TicketService
 from transportista.services import TransportistaService
 
@@ -14,9 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 class IngestTicketUseCase:
-    @staticmethod
+    def __init__(self, geocoder: Geocoder):
+        self._geocoder = geocoder
+
     @transaction.atomic
-    def execute(data: TicketIngestIn) -> TicketIngestOut:
+    def execute(self, data: TicketIngestIn) -> TicketIngestOut:
         transportista = TransportistaService.get_or_create(
             cuit=data.transportista.cuit,
             razon_social=data.transportista.razon_social,
@@ -33,13 +39,37 @@ class IngestTicketUseCase:
         omitidos: list[RemitoOmitidoOut] = []
 
         for remito in data.remitos:
-            destinos, faltantes = UbicacionService.resolve_codigos(remito.destinos)
+            destinos_map: dict[str, RemitoUbicacionIn] = {u.codigo: u for u in remito.destinos}
+            destinos, faltantes = UbicacionService.resolve_codigos(destinos_map.keys())
 
             if faltantes:
-                motivo = f"Códigos de destino desconocidos: {', '.join(faltantes)}"
-                logger.warning("Se omite el remito %s: %s", remito.numero, motivo)
-                omitidos.append(RemitoOmitidoOut(numero=remito.numero, motivo=motivo))
-                continue
+                for ubicacion in faltantes:
+                    destino = destinos_map.get(ubicacion)
+                    geocode_query = GeocodeQuery(
+                        direccion=destino.direccion,
+                        localidad=destino.localidad,
+                        provincia=destino.provincia,
+                        pais=destino.provincia,
+                    )
+                    try:
+                        coordinates = self._geocoder.geocode(query=geocode_query)
+                    except RoutingError:
+                        coordinates = None
+
+                    # Geocode query tiene algunos cleans de datos
+                    ubicacion_instance, _ = UbicacionService.upsert_by_codigo(
+                        codigo=destino.codigo,
+                        tipo=TipoUbicacion.CLIENTE,
+                        nombre=destino.nombre,
+                        calle=geocode_query.direccion,
+                        localidad=geocode_query.localidad,
+                        provincia=geocode_query.provincia,
+                        pais=geocode_query.pais,
+                        lat=coordinates.lat if coordinates else None,
+                        lng=coordinates.lng if coordinates else None,
+                        validada=False,
+                    )
+                    destinos.append(ubicacion_instance)
 
             try:
                 RemitoService.create_remito(

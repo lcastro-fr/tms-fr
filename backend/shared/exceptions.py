@@ -18,6 +18,11 @@ class NotFoundError(DomainError):
     code = "not_found"
 
 
+class ForbiddenError(DomainError):
+    status_code = 403
+    code = "forbidden"
+
+
 class ConflictError(DomainError):
     status_code = 409
     code = "conflict"

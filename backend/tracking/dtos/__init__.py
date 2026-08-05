@@ -1,5 +1,6 @@
 from .ticket_dtos import (
     RemitoOmitidoOut,
+    RemitoUbicacionIn,
     TicketIngestIn,
     TicketIngestOut,
     TicketIngestRemitoIn,
@@ -10,4 +11,5 @@ __all__ = [
     "TicketIngestIn",
     "TicketIngestOut",
     "TicketIngestRemitoIn",
+    "RemitoUbicacionIn",
 ]

@@ -69,6 +69,7 @@ class UbicacionService:
         pais: str = "Argentina",
         lat: float | None = None,
         lng: float | None = None,
+        validada: bool | None = True
     ) -> tuple[Ubicacion, bool]:
         """Devuelve (ubicacion, creada). Idempotente por codigo."""
         UbicacionService._check_tipo(tipo)
@@ -76,6 +77,7 @@ class UbicacionService:
 
         return Ubicacion.objects.update_or_create(
             codigo=codigo,
+            validada=validada,
             defaults={
                 "tipo": tipo,
                 "nombre": nombre,

@@ -76,10 +76,10 @@ def _apply_soft_delete(
 
 
 class ActivosQuerySet(models.QuerySet):
-    def actives(self) -> "ActivosQuerySet":
+    def actives(self) -> ActivosQuerySet:
         return self.filter(active=True)
 
-    def inactives(self) -> "ActivosQuerySet":
+    def inactives(self) -> ActivosQuerySet:
         return self.filter(active=False)
 
     def delete(self) -> tuple[int, dict[str, int]]:

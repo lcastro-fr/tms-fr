@@ -14,10 +14,11 @@ El frontend va detrás del backend, no delante. **Sólo se construyen pantallas 
 endpoints que existen.** Nada de inventar rutas ni mockear respuestas para adelantar UI:
 si falta el endpoint, el trabajo es en `../backend`.
 
-Hoy la API tiene seis operaciones y cuatro son el CRUD de zonas (`/api/v1/zonas/`), así
-que zonas es la única pantalla que se puede hacer de punta a punta. Tickets y órdenes de
-servicio sólo tienen endpoints de escritura pensados para máquina (la ingesta desde SAP y
-el cálculo de costo); les falta API de lectura.
+Hoy la API tiene diez operaciones: cuatro de auth, cuatro del CRUD de zonas
+(`/api/v1/zonas/`) y dos de máquina. Zonas es la única pantalla de dominio que se puede
+hacer de punta a punta. Tickets y órdenes de servicio sólo tienen endpoints de escritura
+pensados para máquina (la ingesta desde SAP y el cálculo de costo); les falta API de
+lectura.
 
 ## Arquitectura
 
@@ -82,20 +83,20 @@ interno. `components/` y `lib/` no importan de `features/`.
 
 ## Cliente HTTP
 
-Una sola instancia, con la config de CSRF que Django espera:
+Una sola instancia, en `src/api/http.ts`:
 
 ```ts
-axios.create({
-  baseURL: "/api/v1",
-  withCredentials: true,
-  xsrfCookieName: "csrftoken",      // default de axios: XSRF-TOKEN
-  xsrfHeaderName: "X-CSRFToken",    // default de axios: X-XSRF-TOKEN
-})
+axios.create({ baseURL: "/api/v1", withCredentials: true })
 ```
 
-Esas dos últimas líneas parecen ruido y no lo son: axios ya sabe leer la cookie y mandar
-el header, pero **sus defaults no son los de Django**. Sin sobreescribirlos el CSRF falla
-sin mensaje. Con ellos no hace falta ningún helper para leer cookies.
+**No se usa `xsrfCookieName`/`xsrfHeaderName`.** Ese mecanismo de axios lee
+`document.cookie`, y el backend va con `CSRF_USE_SESSIONS`: el secreto vive en la sesión y
+**no existe cookie `csrftoken`**. Hay una sola cookie, `sessionid`, y es `HttpOnly`.
+
+El token llega en el body — `SesionOut.csrf_token` de `/auth/login` y `/auth/me`, o
+`CsrfOut` de `/auth/csrf` — vive en memoria del módulo, y un interceptor de request lo
+pone en `X-CSRFToken` para todo método que no sea seguro. `withCredentials` sigue siendo
+necesario para que viaje la `sessionid`.
 
 - **URLs relativas.** No hay `VITE_API_URL`: el mismo origen para SPA y API es la
   topología (nginx sirve las dos cosas en `http://localhost`), no un accidente. Quien
@@ -133,7 +134,13 @@ Hay tres cosas que ese interceptor tiene que tolerar:
 `fieldErrors(err)` traduce los `loc` de pydantic a la forma que espera `form.setErrors()`
 de Mantine.
 
-Un 401 invalida la sesión y redirige a `/login` con el destino en search params.
+Un 401 invalida la sesión y redirige a `/login` con el destino en search params, **salvo en
+`/auth/*`**, que maneja los suyos: el del login son credenciales inválidas y redirigir se
+comería el mensaje, y el de `/auth/me` lo resuelve el `beforeLoad` de `_authenticated`.
+Redirigir ahí loopea.
+
+El redirect se registra con `setOnUnauthorized` desde `main.tsx` y no se importa el router
+en `http.ts`: eso cerraría el ciclo `router → routes → features → api → router`.
 
 ## Data fetching
 
@@ -166,17 +173,36 @@ Un 401 invalida la sesión y redirige a `/login` con el destino en search params
   de la ruta para volverse la entrada del `queryOptions`. Está escrito acá para que sea
   una migración prevista y no un refactor sorpresa.
 
-## Auth — contrato, todavía no implementado
+## Auth y permisos
 
-**Nada de esto existe aún.** La API hoy sólo acepta `X-API-Key`, que es el secreto
-compartido con la integración SAP.
+**El `X-API-Key` no se toca desde el browser.** Autoriza escrituras y ponerlo en el bundle
+lo publica. Quedó sólo para la ingesta desde SAP; `/zonas/` ya no lo acepta.
 
-- **El `X-API-Key` no se toca desde el browser.** Autoriza escrituras y ponerlo en el
-  bundle lo publica. Es exclusivamente machine-to-machine.
-- Backend pendiente: `django_auth` de ninja + `POST /api/v1/auth/login`,
-  `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`, y `CSRF_TRUSTED_ORIGINS`.
-- Frontend: `features/auth/` con `meQueryOptions`, un `beforeLoad` en la ruta
-  `_authenticated`, y `/login` como única ruta pública.
+`features/auth/` es dueño de todo esto. `/login` es la única ruta pública; todo lo demás
+cuelga de `_authenticated`, un layout pathless cuyo `beforeLoad` hace
+`ensureQueryData(meQueryOptions())`, redirige a `/login` con el destino en search params si
+falla, y devuelve `{ sesion }` al context del router.
+
+**Los permisos viven en el cache de Query, no en un store aparte.** `meQueryOptions` va con
+`staleTime: Infinity`, `gcTime: Infinity` y `refetchOnWindowFocus: false`: sin esos tres
+overrides hereda el `staleTime: 30_000` global y la UI se reacomodaría sola a mitad de
+sesión. Se busca **una vez por carga de página** y se refresca sólo en login y logout. Si a
+alguien le cambian los roles, lo ve recién al recargar — y mientras tanto la acción
+revocada devuelve 403, que es la defensa real.
+
+El `beforeLoad` corre **fuera de React**, así que un Context de `providers.tsx` no le
+llegaría. Por eso la sesión entra al context del router: `usePermisos()` la lee con
+`useRouteContext({ from: "/_authenticated" })`, o sea sincrónicamente y sin Suspense.
+
+- `usePermisos()` → `{ sesion, can, canAlguno }`.
+- `<Can permiso="zonas.crear">` para esconder acciones. `permiso` está tipado con la unión
+  de literales que sale de `schema.d.ts`, así que un typo es error de compilación.
+- `requirePermiso(sesion, permiso)` en el `beforeLoad` de una ruta, para quien escribe la
+  URL a mano. **No reemplaza al backend**, que revalida en cada request.
+- La navbar de `_authenticated` se filtra por permiso.
+
+`bootstrapCsrf()` corre sólo en el `loader` de `/login`: es el único momento en que la SPA
+está anónima y necesita un token para poder postear.
 
 ## Convenciones de código
 
@@ -251,9 +277,9 @@ atrapa justo lo que es silencioso cuando se rompe.
 
 ## Pendientes conocidos
 
-- **Falta la capa de API.** No existen `src/api/http.ts`, `errors.ts` ni `schema.d.ts`, así
-  que todo lo que este documento dice sobre el cliente HTTP y el data fetching es contrato,
-  no código. Es el paso siguiente, y depende de que el backend tenga API de lectura.
+- **La única pantalla real es `/login`.** `_authenticated/zonas.tsx` es un placeholder que
+  existe para ejercitar el guard por permiso y el filtrado de la navbar; el CRUD de zonas
+  todavía no está construido, así que `<Can>` no tiene más consumidor que ese botón.
 - **No hay alias `@/`.** Ni en `tsconfig.app.json` (`paths`) ni en `vite.config.ts`
   (`resolve.alias`), así que los imports entre carpetas son relativos.
 - **No hay `ColorSchemeScript`.** `MantineProvider` va con `defaultColorScheme="auto"`, y

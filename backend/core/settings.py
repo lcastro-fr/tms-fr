@@ -123,6 +123,24 @@ STATIC_URL = "api/static/"
 AUTH_USER_MODEL = "users.User"
 
 
+# Sesión y CSRF
+#
+# El secreto de CSRF vive en la sesión, no en una cookie propia: así el browser guarda
+# una sola cookie y va HttpOnly. El token viaja en el body de los DTOs de auth y la SPA
+# lo manda en el header X-CSRFToken.
+
+CSRF_USE_SESSIONS = True
+
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = config("SESSION_COOKIE_AGE", default=60 * 60 * 8, cast=int)
+SESSION_COOKIE_SECURE = config("SESSION_COOKIE_SECURE", default=False, cast=bool)
+
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS", default="http://localhost", cast=Csv()
+)
+
+
 # Integraciones externas
 
 ORS_API_KEY = config("ORS_API_KEY", default="")

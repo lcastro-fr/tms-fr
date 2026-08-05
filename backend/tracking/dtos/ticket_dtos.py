@@ -11,10 +11,19 @@ if TYPE_CHECKING:
     from tracking.models import Ticket
 
 
+class RemitoUbicacionIn(BaseModel):
+    codigo: str
+    nombre: str
+    direccion: str
+    localidad: str
+    provincia: str
+    pais: str
+
+
 class TicketIngestRemitoIn(BaseModel):
     numero: str = Field(min_length=1, max_length=13)
     fecha: AwareDatetime | None = None
-    destinos: list[CodigoUbicacion] = Field(min_length=1)
+    destinos: list[RemitoUbicacionIn] = Field(min_length=1)
 
 
 class TicketIngestIn(BaseModel):

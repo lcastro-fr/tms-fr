@@ -28,7 +28,7 @@ Entre apps: `tracking → logistica → transportista`, y todos → `catalog`. N
 | `transportista` | `Transportista`, `Tarifario`, `TarifaFlete`, `ConceptoAdicional`, `TarifaConceptoAdicional` | — | Tarifarios con vigencia. Sin `use_cases/`. |
 | `logistica` | `OrdenServicio`, `CostoOrdenServicio` | — | Sin `use_cases/`: el de costo vive en `tracking`. |
 | `tracking` | `Ticket`, `Remito`, `RemitoDestino` | ingesta, costo de OS | La punta de entrada. |
-| `users` | `User` (login por email, `username = None`) | — | `AUTH_USER_MODEL`. Sólo admin. |
+| `users` | `User` (login por email, `username = None`), `Permiso`, `Rol`, `UsuarioRol`, `RolPermiso` | auth (login/logout/me/csrf) | `AUTH_USER_MODEL` y el RBAC. La gestión de roles es sólo por admin. |
 
 `shared/` **no es una app**: es un paquete de soporte (`BaseModel` abstracto,
 `exceptions.py`, `dtos.py`, `xlsx.py`). `routing/` es un directorio vacío reservado para el
@@ -63,20 +63,26 @@ saberlo antes de buscarlo en `logistica/`.
 
 ## La API hoy
 
-Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **seis operaciones**:
+Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **diez operaciones**:
 
-| Método | Path | Entrada | Salida |
-|---|---|---|---|
-| POST | `/api/v1/tickets/ingest` | `TicketIngestIn` | 201 `TicketIngestOut` |
-| POST | `/api/v1/ordenes-servicio/{id}/costo` | — | 200 `CostoOrdenServicioOut` |
-| GET | `/api/v1/zonas/` | — | 200 `list[ZonaOut]` |
-| POST | `/api/v1/zonas/` | `ZonaIn` | 201 `ZonaOut` |
-| GET | `/api/v1/zonas/{id}` | — | 200 `ZonaOut` |
-| PUT | `/api/v1/zonas/{id}` | `ZonaIn` | 200 `ZonaOut` |
+| Método | Path | Auth | Entrada | Salida |
+|---|---|---|---|---|
+| GET | `/api/v1/auth/csrf` | — | — | 200 `CsrfOut` |
+| POST | `/api/v1/auth/login` | — | `LoginIn` | 200 `SesionOut` |
+| POST | `/api/v1/auth/logout` | sesión | — | 204 |
+| GET | `/api/v1/auth/me` | sesión | — | 200 `SesionOut` |
+| POST | `/api/v1/tickets/ingest` | `X-API-Key` | `TicketIngestIn` | 201 `TicketIngestOut` |
+| POST | `/api/v1/ordenes-servicio/{id}/costo` | `X-API-Key` | — | 200 `CostoOrdenServicioOut` |
+| GET | `/api/v1/zonas/` | `zonas.ver` | — | 200 `list[ZonaOut]` |
+| POST | `/api/v1/zonas/` | `zonas.crear` | `ZonaIn` | 201 `ZonaOut` |
+| GET | `/api/v1/zonas/{id}` | `zonas.ver` | — | 200 `ZonaOut` |
+| PUT | `/api/v1/zonas/{id}` | `zonas.editar` | `ZonaIn` | 200 `ZonaOut` |
 
-Todas declaran `**ERRORS` (400/401/404/409/422/500 → `ErrorOut`) y todas van con
-`auth=IngestApiKeyAuth()`. No hay DELETE, no hay `/health`, no hay paginación y **no hay
-ningún DTO `...Filters` todavía**: `GET /zonas/` devuelve el array completo sin envelope.
+Todas declaran `**ERRORS` (400/401/403/404/409/422/500 → `ErrorOut`). **Zonas ya no acepta
+`X-API-Key`**: es browser-only. La `X-API-Key` quedó exclusivamente para la ingesta y el
+costo de OS, que son máquina-a-máquina. No hay DELETE, no hay `/health`, no hay paginación
+y **no hay ningún DTO `...Filters` todavía**: `GET /zonas/` devuelve el array completo sin
+envelope.
 
 La barra final de `/zonas/` es obligatoria: con `APPEND_SLASH` un GET sin barra redirige
 301 y un POST sin barra falla.
@@ -97,23 +103,71 @@ Y un DTO tiene una trampa: **`TicketIngestOut.completo` no viaja en el JSON.** E
 
 ### Auth
 
-`core/auth.py` tiene una sola clase: `IngestApiKeyAuth(APIKeyHeader)` con
-`param_name = "X-API-Key"`, comparada con `settings.INGEST_API_KEY` vía
-`hmac.compare_digest`. Sin la variable seteada **todo devuelve 401**.
+`core/auth.py` tiene dos clases:
 
-Es auth machine-to-machine y nada más. No hay endpoint de login, y una sesión del admin no
-da acceso a `/api/v1/*`. Lo que hace falta para la SPA está en `../CLAUDE.md`.
+- `IngestApiKeyAuth(APIKeyHeader)`, `param_name = "X-API-Key"`, comparada con
+  `settings.INGEST_API_KEY` vía `hmac.compare_digest`. Sin la variable seteada devuelve
+  401. Es machine-to-machine y hoy sólo la usan la ingesta y el costo de OS.
+- `SessionAuth(ninja.security.SessionAuth)`, que además recibe los permisos que la
+  operación exige: `auth=SessionAuth(PermisoCodigo.ZONAS_CREAR)`.
 
-Sobre CSRF, para no repetir un error que ya está escrito en un comentario del código:
+**La autorización vive en la clase de auth, no en un decorador sobre la view.** Se intentó
+con decorador y no funciona: `functools.wraps` no puede copiar el `__globals__`, y ninja
+resuelve las anotaciones (`payload: ZonaIn`, que con `from __future__ import annotations`
+es un string) contra los globals de la función que recibe. Rompe toda operación con body.
+
+La regla que hace que esto sea correcto: **devolver `None` da 401, levantar `ForbiddenError`
+da 403.** `Operation._run_authentication` envuelve el callback en `try/except` y lo rutea
+por `api.on_exception`, así que la excepción llega a nuestros handlers. La diferencia
+importa: el frontend trata el 401 como sesión muerta y desloguea, así que un usuario
+logueado sin permiso **tiene que ver 403**.
+
+### Sesión y CSRF
+
+`CSRF_USE_SESSIONS = True`: el secreto de CSRF vive dentro de la sesión y **no existe la
+cookie `csrftoken`**. El browser guarda una sola cookie, `sessionid`, con `HttpOnly`. El
+token viaja en el body (`SesionOut.csrf_token`) y la SPA lo manda en `X-CSRFToken`.
+
 ninja marca cada vista generada como `csrf_exempt` a nivel del middleware de Django, y el
-chequeo real vive **dentro de la clase de auth** — `APIKeyCookie.__init__(csrf=True)`.
-`APIKeyHeader` no chequea nada. O sea que hoy la API no tiene CSRF, y activarlo no es un
-flag de `NinjaAPI` (ese kwarg no existe en 1.6.2) sino pasar a una auth por cookie.
+chequeo real vive **dentro de la clase de auth** — `APIKeyCookie.__init__(csrf=True)`, del
+que `SessionAuth` hereda. No es un flag de `NinjaAPI` (ese kwarg no existe en 1.6.2). Los
+métodos seguros lo saltean, así que un `GET /auth/me` no pide el header.
+
+`POST /auth/login` va con `auth=None`, o sea que **ninja no chequea nada**: el chequeo se
+agrega a mano con `check_csrf` de `ninja.utils`. Sin esa línea el login queda expuesto a
+login-CSRF. Por eso existe `GET /auth/csrf`: entrega el token del usuario anónimo, que es
+el único que no puede sacarlo de `SesionOut`.
+
+`login()` de Django llama a `rotate_token()`, así que el token del bootstrap muere en ese
+mismo request. Por eso `/auth/login` devuelve el nuevo en su respuesta.
+
+### RBAC
+
+`shared/permisos.py` define `PermisoCodigo(StrEnum)`, que es **la fuente de verdad** del
+catálogo. Vive en `shared/` y no en `users/` porque ponerlo allá obligaría a `catalog` a
+importar `users`. `sync_permisos` materializa una fila por miembro y da de baja lógica las
+que ya no están en el enum.
+
+Las tablas de relación son **propias, no las automáticas de Django**: `UsuarioRol` y
+`RolPermiso` heredan de `BaseModel`. La intermedia que genera Django no tiene columna
+`active`, así que `_apply_soft_delete` la saltea y dar de baja un `Rol` dejaría vivas sus
+asignaciones. Con `through=` se conservan igual los accesores (`rol.permisos.all()`), y
+como efecto el admin pierde `filter_horizontal` y usa inlines.
+
+`PermisoService.codigos_de_usuario` resuelve los permisos de un usuario en una query. Lleva
+un `active=True` explícito **por cada salto del join**: el manager por default sólo filtra
+el modelo raíz, no los que atraviesa. Y filtra el resultado contra el enum, porque una fila
+con un código retirado haría fallar la validación de `SesionOut` con un 500.
+
+`AutenticacionService` es el único service que recibe el `HttpRequest`. Es a propósito:
+`login()`/`logout()` de Django lo exigen y son escrituras de sesión, o sea ORM, que por la
+regla dura va en `services/`.
 
 ### Excepciones
 
-`shared/exceptions.py` define `DomainError` y sus tres subtipos semánticos:
-`NotFoundError` (404), `ConflictError` (409), `BusinessRuleError` (422). Las excepciones
+`shared/exceptions.py` define `DomainError` y sus cuatro subtipos semánticos:
+`ForbiddenError` (403), `NotFoundError` (404), `ConflictError` (409),
+`BusinessRuleError` (422). Las excepciones
 anidadas de los services heredan de esos, así un solo `exception_handler` resuelve toda
 la jerarquía por MRO. Ninguna subclase sobreescribe `code`: lo que cambia es el mensaje.
 
@@ -123,9 +177,13 @@ la jerarquía por MRO. Ninguna subclase sobreescribe `code`: lo que cambia es el
 {"error": {"code": "conflict", "message": "...", "detail": {}}}
 ```
 
-Los `code` posibles son siete: `not_found`, `conflict`, `business_rule`, `domain_error`,
-`payload_invalid` (pydantic, el único que trae `detail.errors`), `unauthorized`,
-`internal_error`.
+Los `code` posibles son nueve: `not_found`, `conflict`, `business_rule`, `domain_error`,
+`forbidden`, `payload_invalid` (pydantic, el único que trae `detail.errors`),
+`unauthorized`, `http_error`, `internal_error`.
+
+Hay un handler para `ninja.errors.HttpError` y **no es opcional**: ninja registra el suyo
+por default, y como `HttpError` es más específico que `Exception` gana por MRO. Sin el
+nuestro, un CSRF fallido responde `{"detail": "CSRF check Failed"}` y rompe el envelope.
 
 **El 422 es ambiguo en el cable** — `business_rule` y `payload_invalid` comparten status.
 Quien consuma la API ramifica por `code`.
@@ -231,8 +289,12 @@ imagen: las dependencias son del build, y agregar una pide `docker compose build
 
 ```bash
 uv run manage.py seed_demo          # crea PL01 (planta) + CL100/CL200 (destinos)
-uv run manage.py createsuperuser    # para el admin
+uv run manage.py sync_permisos      # materializa PermisoCodigo en la tabla permiso
+uv run manage.py createsuperuser    # para el admin, y pasa todo el RBAC
 ```
+
+`sync_permisos` es idempotente y hay que correrlo **después de cada migrate** que agregue
+códigos al enum. Los roles y su asignación se cargan desde el admin.
 
 También hay `import_ubicaciones`, que levanta los xlsx de `seed/` (compose los monta en
 `/app/seed:ro`) usando `shared/xlsx.py`.
@@ -252,10 +314,11 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
 
 ## Pendientes conocidos
 
-- **Cero tests.** No hay `conftest.py` ni un solo `test_*.py`; los cinco `tests.py` son
-  los stubs de 3 líneas que genera Django. La config de pytest está lista y no hay nada
-  que corra. `shared/models.py` sigue siendo el código más delicado del repo y el primer
-  candidato.
+- **Los únicos tests son los de auth/RBAC** (`conftest.py` + `users/tests/`): resolver,
+  cascada del borrado lógico, endpoints, CSRF y 403-vs-401. `shared/models.py` sigue siendo
+  el código más delicado del repo y sigue sin cobertura propia. Los tests van en un
+  directorio `tests/`, no en un `test_*.py` suelto: el per-file-ignore de `S101` es
+  `*/tests/*`.
 - **El management command de la ingesta programada no existe.**
   `tracking/management/commands/` tiene sólo `__init__.py`, así que hoy la única forma de
   disparar la ingesta es el POST. Es el paso 1 sin terminar.

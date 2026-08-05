@@ -68,8 +68,9 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "*/migrations/*" = ["E501", "I001"]
-"*/tests/*" = ["S101"]
-"conftest.py" = ["S101"]
+# S105/S106: los tests de auth necesitan contraseñas literales.
+"*/tests/*" = ["S101", "S105", "S106"]
+"conftest.py" = ["S101", "S105", "S106"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"

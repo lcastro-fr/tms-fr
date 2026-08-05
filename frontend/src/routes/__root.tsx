@@ -1,19 +1,11 @@
-import { AppShell, Group, Title } from "@mantine/core";
-import { Outlet, createRootRoute } from "@tanstack/react-router";
+import type { QueryClient } from "@tanstack/react-query";
+import { Outlet, createRootRouteWithContext } from "@tanstack/react-router";
 
-function RootLayout() {
-    return (
-        <AppShell header={{ height: 56 }} padding="md">
-            <AppShell.Header>
-                <Group h="100%" px="md" justify="space-between">
-                    <Title order={4}>TMS-FR</Title>
-                </Group>
-            </AppShell.Header>
-            <AppShell.Main>
-                <Outlet />
-            </AppShell.Main>
-        </AppShell>
-    );
-}
+export type RouterContext = {
+    queryClient: QueryClient;
+};
 
-export const Route = createRootRoute({ component: RootLayout });
+// El AppShell vive en _authenticated: /login no va adentro del shell.
+export const Route = createRootRouteWithContext<RouterContext>()({
+    component: Outlet,
+});

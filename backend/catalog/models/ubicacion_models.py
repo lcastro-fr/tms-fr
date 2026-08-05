@@ -18,6 +18,7 @@ class Ubicacion(BaseModel):
     provincia = models.CharField(max_length=120)
     pais = models.CharField(max_length=120, default="Argentina")
     coordinates = models.PointField(srid=4326, blank=True, null=True, spatial_index=True)
+    validada = models.BooleanField(default=True)
 
     @property
     def latitud(self) -> float | None:

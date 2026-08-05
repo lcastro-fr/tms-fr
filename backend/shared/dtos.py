@@ -16,6 +16,7 @@ class ErrorOut(BaseModel):
 ERRORS: dict[int, type[ErrorOut]] = {
     400: ErrorOut,
     401: ErrorOut,
+    403: ErrorOut,
     404: ErrorOut,
     409: ErrorOut,
     422: ErrorOut,

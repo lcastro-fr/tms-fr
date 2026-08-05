@@ -104,6 +104,9 @@ El `.env` vive en la raíz. `AutoConfig` de decouple lo busca desde `REPO_ROOT`.
   sea que **sólo llegan las variables que compose pasa explícitamente**. `TZ_OPERACION`,
   `CONN_MAX_AGE` y `SQL_LOG_LEVEL` no están en esa lista y se quedan en su default.
   Host-side (`uv run manage.py`) sí se lee el `.env` completo.
+- Las de sesión — `CSRF_TRUSTED_ORIGINS`, `SESSION_COOKIE_AGE`, `SESSION_COOKIE_SECURE` —
+  **sí** están en la lista de compose. Agregar una variable nueva de auth y olvidarse de
+  `docker-compose.yml` la deja en su default adentro del contenedor, en silencio.
 
 ## Dev loop
 
@@ -138,6 +141,9 @@ Django: `docker compose up -d db` y después el loop de `backend/CLAUDE.md`. Ojo
 - **Un solo envelope de error:** `{"error": {"code", "message", "detail"}}`. Se ramifica
   por `code`, nunca por status — el 422 es dos cosas distintas (`business_rule` vs
   `payload_invalid`).
+- **401 y 403 no son lo mismo.** El 401 es sesión ausente o muerta y el frontend desloguea;
+  el 403 es un usuario logueado sin permiso, y la UI muestra el error sin cerrar la sesión.
+  Confundirlos echa al usuario cada vez que toca un botón que no le corresponde.
 - **Nada de fallas silenciosas.** Si una operación descarta datos, eso viaja en el DTO de
   salida y se le muestra al usuario. No alcanza con no romper.
 - **La misma dirección única de dependencias en las dos capas:**
@@ -148,14 +154,11 @@ Django: `docker compose up -d db` y después el loop de `backend/CLAUDE.md`. Ojo
 
 Los de cada capa están en su documento. Estos cruzan las dos:
 
-- **No hay auth usable desde el browser.** La API sólo acepta `X-API-Key`, que es el
-  secreto compartido con la integración SAP y autoriza escrituras: mandarlo desde la SPA
-  lo publica en el bundle. La decisión tomada es sesión Django + CSRF
-  (`django_auth` de ninja, más `POST /auth/login`, `/auth/logout`, `GET /auth/me` y
-  `CSRF_TRUSTED_ORIGINS`), y no está implementada.
-- **`nginx.conf` no manda los headers de upgrade a WebSocket** en `location /`, así que
-  el HMR de Vite no funciona a través del puerto 80. Falta `proxy_http_version 1.1` más
-  `Upgrade` / `Connection`.
+- **No hay API de gestión de usuarios ni roles.** El alta de usuarios, la creación de roles
+  y la asignación se hacen 100% desde el admin de Django. La SPA sólo lee sus permisos.
+- **El catálogo de permisos crece con el código.** `shared/permisos.py` es la fuente de
+  verdad, así que agregar un permiso es un cambio de código más `manage.py sync_permisos`,
+  no una fila cargada a mano.
 - **`backend/seed/` reaparece como `root:root`.** Es el punto de montaje de
   `./seed:/app/seed:ro`, un mount anidado dentro del bind mount de `/app`, y Docker crea
   ese directorio como root sin importar el `user:`. Queda siempre tapado por el mount, así
