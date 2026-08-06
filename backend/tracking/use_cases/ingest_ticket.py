@@ -19,7 +19,7 @@ from tracking.dtos import (
     TicketIngestOut,
 )
 from tracking.services import RemitoService, TicketService
-from transportista.services import TransportistaService
+from transportista.services import TarifarioService, TransportistaService
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +36,18 @@ class IngestTicketUseCase:
         )
         planta = UbicacionService.get_ubicacion_by_codigo_or_raise(data.planta_codigo)
 
+        # Si existe un tarifario vigene, es facturable
+        facturable = True
+        try:
+            _ = TarifarioService.get_tarifario_at(transportista.id, data.fecha_ingreso)
+        except (TarifarioService.TarifarioNotFoundError, TarifarioService.TarifaAmbiguaError):
+            facturable = False
+
         orden_servicio = OrdenServicioService.create_orden_servicio(
             origen_id=planta.id,
             transportista_id=transportista.id,
             fecha_viaje=data.fecha_ingreso,
+            facturable=facturable,
         )
 
         creados: list[str] = []

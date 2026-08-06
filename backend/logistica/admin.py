@@ -14,9 +14,10 @@ class OrdenServicioAdmin(admin.ModelAdmin):
         "fecha_viaje",
         "tipo_camion",
         "hombreador",
+        "facturable",
         "active",
     )
-    list_filter = ("active", "tipo_operacion", "via", "tipo_camion", "hombreador")
+    list_filter = ("active", "tipo_operacion", "via", "tipo_camion", "hombreador", "facturable")
     autocomplete_fields = ("origen", "transportista")
     date_hierarchy = "fecha_viaje"
 

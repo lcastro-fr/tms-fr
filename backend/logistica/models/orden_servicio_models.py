@@ -24,6 +24,7 @@ class OrdenServicio(BaseModel):
     )
     via = models.CharField(max_length=20, choices=VIA_CHOICES, default=Via.TERRESTRE.value)
     hombreador = models.BooleanField(default=False)
+    facturable = models.BooleanField(default=False)
 
     class Meta(BaseModel.Meta):
         db_table = "orden_servicio"

@@ -30,6 +30,7 @@ class OrdenServicioService:
         tipo_camion: str | None = None,
         hombreador: bool = False,
         via: str = Via.TERRESTRE.value,
+        facturable: bool = False
     ) -> OrdenServicio:
         return OrdenServicio.objects.create(
             origen_id=origen_id,
@@ -39,6 +40,7 @@ class OrdenServicioService:
             tipo_camion=tipo_camion,
             hombreador=hombreador,
             via=via,
+            facturable=facturable
         )
 
     @staticmethod

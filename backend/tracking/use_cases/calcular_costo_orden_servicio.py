@@ -26,10 +26,19 @@ class CalcularCostoOrdenServicioUseCase:
     class ConceptoCamaraRequeridoError(BusinessRuleError):
         pass
 
+    class OrdenServicioNoFacturable(BusinessRuleError):
+        pass
+
     @staticmethod
     @transaction.atomic
     def execute(orden_servicio_id: int) -> CostoOrdenServicioOut:
         orden = OrdenServicioService.get_orden_servicio_or_raise(orden_servicio_id)
+
+        if orden.facturable is False:
+            raise CalcularCostoOrdenServicioUseCase.OrdenServicioNoFacturable(
+                f"La orden de servicio {orden.id} no es facturable",
+                detail={"orden_servicio_id": orden.id},
+            )
 
         if orden.fecha_viaje is None:
             raise CalcularCostoOrdenServicioUseCase.FechaViajeRequeridaError(
