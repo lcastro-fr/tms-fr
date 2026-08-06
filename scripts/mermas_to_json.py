@@ -36,6 +36,11 @@ COL_FECHA_REMITO = "Fecha Remito"
 COL_HORA_REMITO = "Hora Remito"
 COL_REMITO = "Remito"
 COL_CUENTA_CLI = "Cuenta Cli."
+COL_U_NOMBRE = "Razon Social"
+COL_U_DOMICILIO = "Domicilio"
+COL_U_LOCALIDAD = "Localidad"
+COL_U_PROVINCIA = "Provincia"
+COL_U_PAIS = "Pais"
 
 REQUIRED_COLUMNS = (
     COL_TICKET,
@@ -49,6 +54,11 @@ REQUIRED_COLUMNS = (
     COL_HORA_REMITO,
     COL_REMITO,
     COL_CUENTA_CLI,
+    COL_U_NOMBRE,
+    COL_U_DOMICILIO,
+    COL_U_LOCALIDAD,
+    COL_U_PROVINCIA,
+    COL_U_PAIS,
 )
 
 # Campos que tienen que ser iguales en todas las filas de un mismo ticket.
@@ -146,7 +156,7 @@ def build_payloads(
 
     inconsistent: list[str] = []
     payloads: list[dict[str, Any]] = []
-    destinos_vistos: set[str] = set()
+    destinos_vistos = set()
     sin_fecha = 0
 
     for numero, group in grouped.items():
@@ -160,8 +170,15 @@ def build_payloads(
             fecha = to_datetime(row.get(COL_FECHA_REMITO), row.get(COL_HORA_REMITO), tz)
             if fecha is None:
                 sin_fecha += 1
-            destino = str(int(row[COL_CUENTA_CLI]))
-            destinos_vistos.add(destino)
+            destino = {
+                "nombre": row.get(COL_U_NOMBRE),
+                "codigo": str(int(row[COL_CUENTA_CLI])),
+                "direccion": row.get(COL_U_DOMICILIO),
+                "localidad": row.get(COL_U_LOCALIDAD),
+                "provincia": row.get(COL_U_PROVINCIA),
+                "pais": row.get(COL_U_PAIS),
+            }
+            destinos_vistos.add(destino["codigo"])
             remitos.append(
                 {
                     "numero": row[COL_REMITO],
@@ -247,7 +264,7 @@ def main() -> int:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
-        json.dumps(payloads, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps(payloads, indent=3, ensure_ascii=False) + "\n", encoding="utf-8"
     )
 
     print(f"{args.input.name}: {stats['filas']} filas", file=sys.stderr)

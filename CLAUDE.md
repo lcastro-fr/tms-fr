@@ -167,8 +167,12 @@ Los de cada capa están en su documento. Estos cruzan las dos:
   `^20.19 || >=22.12`. El contenedor `web` usa `node:24-slim` y cumple, pero si el host
   tiene menos que eso, `pnpm dev/build/test` sólo corren adentro del contenedor.
 - **No hay `.env.example`**, aunque el arranque lo asumía (`cp .env.example .env`).
-- **Cero tests en todo el repo.** Ni backend ni frontend: no hay `conftest.py`, ningún
-  `test_*.py` y ningún runner en el frontend.
+- **La cobertura es parcial y desigual.** El backend tiene auth/RBAC (`users/tests/`), los
+  contratos de catalog (`catalog/tests/`) y la geolocalización de la ingesta
+  (`tracking/tests/`); el frontend tiene las conversiones geo y el cableado de los dos mapas.
+  Sin cobertura: `shared/models.py` —el borrado lógico, el código más delicado del repo—,
+  `transportista/` completo, el costeo de OS, y **no hay MSW**, así que en el frontend no se
+  pueden testear estados de carga ni error del camino real de datos.
 - **No hay historia de producción.** El `Dockerfile` del frontend es single-stage de dev
   (`CMD pnpm dev`) y el backend no tiene `STATIC_ROOT` ni `collectstatic`. Todo el setup
   actual asume dev.

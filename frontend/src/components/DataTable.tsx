@@ -68,6 +68,7 @@ export function DataTable<T>({
                 borderRadius: "var(--mantine-radius-md)",
                 overflow: "hidden",
                 border: "1px solid var(--mantine-color-default-border)",
+                padding: "var(--mantine-spacing-xs)",
             }}
         >
             <Table striped highlightOnHover>

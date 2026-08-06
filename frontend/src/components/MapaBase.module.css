@@ -1,4 +1,3 @@
-/* Un MapContainer sin altura explícita mide 0px y el mapa no aparece, sin error. */
 .contenedor {
     height: 60vh;
     min-height: 320px;

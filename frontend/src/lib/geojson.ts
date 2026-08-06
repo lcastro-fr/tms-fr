@@ -6,7 +6,6 @@ type GeoJSONPoint = components["schemas"]["GeoJSONPoint"];
 export type LatLng = [number, number];
 export type Bounds = [LatLng, LatLng];
 
-// GeoJSON es [lng, lat] y Leaflet [lat, lng]: hay que invertir en los dos bordes.
 export function aLatLngs(geom: GeoJSONPolygon): LatLng[][] {
     return geom.coordinates.map((anillo) => anillo.map(([lng, lat]) => [lat, lng] as LatLng));
 }
@@ -16,7 +15,6 @@ export function aLatLng(punto: GeoJSONPoint): LatLng {
     return [lat, lng];
 }
 
-// El backend exige anillos cerrados: GEOS rechaza uno abierto con 422 business_rule.
 export function cerrarAnillos(coordinates: number[][][]): number[][][] {
     return coordinates.map((anillo) => {
         const primero = anillo[0];

@@ -15,8 +15,6 @@ type Ubicaciones = {
     sinCoordenadas: number;
 };
 
-// La capa es opcional: useQuery y no useSuspenseQuery, para no dejar el mapa en blanco
-// mientras cargan los puntos.
 export function useUbicaciones(): Ubicaciones {
     const { can } = usePermisos();
     const puedeVer = can("ubicaciones.ver");

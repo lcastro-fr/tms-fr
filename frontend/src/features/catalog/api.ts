@@ -7,6 +7,15 @@ export type ZonaOut = components["schemas"]["ZonaOut"];
 export type ZonaIn = components["schemas"]["ZonaIn"];
 export type GeoJSONPolygon = components["schemas"]["GeoJSONPolygon"];
 export type UbicacionOut = components["schemas"]["UbicacionOut"];
+export type UbicacionIn = components["schemas"]["UbicacionIn"];
+export type UbicacionesFilters = components["schemas"]["UbicacionesFilters"];
+
+export type UbicacionesSeleccion = {
+    validada?: boolean;
+    con_coordenadas?: boolean;
+};
+export type GeoJSONPoint = components["schemas"]["GeoJSONPoint"];
+export type TipoUbicacion = components["schemas"]["TipoUbicacion"];
 
 export const zonasKeys = {
     all: ["zonas"] as const,
@@ -16,7 +25,7 @@ export const zonasKeys = {
 
 export const ubicacionesKeys = {
     all: ["ubicaciones"] as const,
-    lista: () => ["ubicaciones", "lista"] as const,
+    lista: (filters: UbicacionesFilters) => ["ubicaciones", "lista", filters] as const,
 };
 
 export const zonasQueryOptions = () =>
@@ -31,11 +40,11 @@ export const zonaQueryOptions = (id: number) =>
         queryFn: () => http.get<ZonaOut>(`/zonas/${id}`).then((r) => r.data),
     });
 
-// Datos maestros: no hace falta revalidarlos cada 30s como el resto.
-export const ubicacionesQueryOptions = () =>
+export const ubicacionesQueryOptions = (filters: UbicacionesFilters = {}) =>
     queryOptions({
-        queryKey: ubicacionesKeys.lista(),
-        queryFn: () => http.get<UbicacionOut[]>("/ubicaciones/").then((r) => r.data),
+        queryKey: ubicacionesKeys.lista(filters),
+        queryFn: () =>
+            http.get<UbicacionOut[]>("/ubicaciones/", { params: filters }).then((r) => r.data),
         staleTime: 5 * 60_000,
     });
 
@@ -51,4 +60,12 @@ export async function actualizarZona(id: number, payload: ZonaIn): Promise<ZonaO
 
 export async function eliminarZona(id: number): Promise<void> {
     await http.delete(`/zonas/${id}`);
+}
+
+export async function actualizarUbicacion(
+    id: number,
+    payload: UbicacionIn,
+): Promise<UbicacionOut> {
+    const { data } = await http.put<UbicacionOut>(`/ubicaciones/${id}`, payload);
+    return data;
 }

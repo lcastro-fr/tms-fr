@@ -26,7 +26,6 @@ CUADRADO = [
     ]
 ]
 
-# Una moña: el anillo se cruza a sí mismo y GEOS lo rechaza.
 MONA = [
     [
         [-58.5, -34.6],
@@ -79,7 +78,6 @@ def test_polygon_que_se_autointersecta_da_business_rule(client, usuario_con):
 
 
 def test_nombre_vacio_da_payload_invalid_y_no_business_rule(client, usuario_con):
-    """El 422 es ambiguo: el frontend ramifica por code, así que el code importa."""
     client.force_login(usuario_con(PermisoCodigo.ZONAS_CREAR))
 
     resp = client.post(ZONAS, zona_in("", CUADRADO), content_type="application/json")
@@ -123,7 +121,6 @@ def test_el_nombre_queda_libre_despues_de_eliminar(client, usuario_con):
 
 
 def test_eliminar_una_zona_con_tarifas_da_conflict_y_no_500(client, usuario_con):
-    """TarifaFlete.zona es PROTECT: el ProtectedError tiene que salir como 409."""
     client.force_login(usuario_con(PermisoCodigo.ZONAS_ELIMINAR))
     zona = Zona.objects.create(nombre="Norte", geom=polygon(CUADRADO))
     tarifario = Tarifario.objects.create(

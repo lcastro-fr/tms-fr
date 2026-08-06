@@ -34,8 +34,6 @@ export function ControlUbicaciones({
                     No se pudieron cargar las ubicaciones.
                 </Text>
             )}
-            {/* Que no se dibujen no puede quedar en silencio: el usuario está justamente
-                verificando que el polígono cubra todos los puntos. */}
             {mostrar && !cargando && sinCoordenadas > 0 && (
                 <Text c="dimmed" size="xs">
                     {sinCoordenadas} sin coordenadas, no se dibujan.

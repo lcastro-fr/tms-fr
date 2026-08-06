@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
+
 from django.contrib.gis.geos import Point
+from django.db import transaction
 
 from catalog.enums import SRID_WGS84, TipoUbicacion
 from catalog.models import Ubicacion
@@ -18,8 +21,46 @@ class UbicacionService:
         pass
 
     @staticmethod
-    def list_ubicaciones() -> list[Ubicacion]:
-        return list(Ubicacion.objects.order_by("nombre"))
+    def list_ubicaciones(
+        validada: bool | None = None, con_coordenadas: bool | None = None
+    ) -> list[Ubicacion]:
+        qs = Ubicacion.objects.all()
+        if validada is not None:
+            qs = qs.filter(validada=validada)
+        if con_coordenadas is not None:
+            qs = qs.filter(coordinates__isnull=not con_coordenadas)
+        return list(qs.order_by("nombre"))
+
+    @staticmethod
+    def get_ubicacion(ubicacion_id: int) -> Ubicacion | None:
+        return Ubicacion.objects.filter(pk=ubicacion_id).first()
+
+    @staticmethod
+    def get_ubicacion_or_raise(ubicacion_id: int) -> Ubicacion:
+        ubicacion = UbicacionService.get_ubicacion(ubicacion_id)
+        if ubicacion is None:
+            raise UbicacionService.UbicacionNotFoundError(
+                f"No existe la ubicación {ubicacion_id}",
+                detail={"ubicacion_id": ubicacion_id},
+            )
+        return ubicacion
+
+    @staticmethod
+    def update_ubicacion(
+        ubicacion: Ubicacion, nombre: str, tipo: str, lat: float, lng: float
+    ) -> Ubicacion:
+        UbicacionService._check_tipo(tipo)
+        coordinates = UbicacionService._build_coordinates(lat, lng)
+
+        ubicacion.nombre = nombre
+        ubicacion.tipo = tipo
+        ubicacion.coordinates = coordinates
+        ubicacion.validada = True
+        with transaction.atomic():
+            ubicacion.save(
+                update_fields=["nombre", "tipo", "coordinates", "validada", "updated_at"]
+            )
+        return ubicacion
 
     @staticmethod
     def get_ubicacion_by_codigo(codigo: str) -> Ubicacion | None:
@@ -73,24 +114,27 @@ class UbicacionService:
         pais: str = "Argentina",
         lat: float | None = None,
         lng: float | None = None,
-        validada: bool | None = True
+        validada: bool = True,
     ) -> tuple[Ubicacion, bool]:
         """Devuelve (ubicacion, creada). Idempotente por codigo."""
         UbicacionService._check_tipo(tipo)
         coordinates = UbicacionService._build_coordinates(lat, lng)
 
+        campos: dict[str, Any] = {
+            "tipo": tipo,
+            "nombre": nombre,
+            "calle": calle,
+            "localidad": localidad,
+            "provincia": provincia,
+            "pais": pais,
+        }
+        al_crear = {**campos, "coordinates": coordinates, "validada": validada}
+
+        if coordinates is not None:
+            campos["coordinates"] = coordinates
+
         return Ubicacion.objects.update_or_create(
-            codigo=codigo,
-            validada=validada,
-            defaults={
-                "tipo": tipo,
-                "nombre": nombre,
-                "calle": calle,
-                "localidad": localidad,
-                "provincia": provincia,
-                "pais": pais,
-                "coordinates": coordinates,
-            },
+            codigo=codigo, defaults=campos, create_defaults=al_crear
         )
 
     @staticmethod

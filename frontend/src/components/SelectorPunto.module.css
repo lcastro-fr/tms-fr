@@ -1,0 +1,7 @@
+.marcador {
+    border-radius: 50%;
+    background-color: var(--mantine-color-red-6);
+    border: 2px solid var(--mantine-color-white);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    cursor: grab;
+}

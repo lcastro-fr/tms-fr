@@ -40,16 +40,23 @@ class RemitoOmitidoOut(BaseModel):
     motivo: str
 
 
+class DestinoSinGeolocalizarOut(BaseModel):
+    codigo: str
+    nombre: str
+    motivo: str
+
+
 class TicketIngestOut(BaseModel):
     ticket_id: int
     numero: str
     orden_servicio_id: int
     remitos_creados: list[str]
     remitos_omitidos: list[RemitoOmitidoOut]
+    destinos_sin_geolocalizar: list[DestinoSinGeolocalizarOut]
 
     @property
     def completo(self) -> bool:
-        return not self.remitos_omitidos
+        return not self.remitos_omitidos and not self.destinos_sin_geolocalizar
 
     @classmethod
     def from_model(
@@ -57,6 +64,7 @@ class TicketIngestOut(BaseModel):
         ticket: Ticket,
         remitos_creados: list[str],
         remitos_omitidos: list[RemitoOmitidoOut],
+        destinos_sin_geolocalizar: list[DestinoSinGeolocalizarOut],
     ) -> TicketIngestOut:
         return cls(
             ticket_id=ticket.id,
@@ -64,4 +72,5 @@ class TicketIngestOut(BaseModel):
             orden_servicio_id=ticket.orden_servicio_id,
             remitos_creados=remitos_creados,
             remitos_omitidos=remitos_omitidos,
+            destinos_sin_geolocalizar=destinos_sin_geolocalizar,
         )

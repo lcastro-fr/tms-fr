@@ -5,6 +5,7 @@ from ninja import Router
 
 from core.auth import IngestApiKeyAuth
 from logistica.dtos import CostoOrdenServicioOut
+from routing.factory import build_geocoder
 from shared.dtos import ERRORS
 from tracking.dtos import TicketIngestIn, TicketIngestOut
 from tracking.use_cases import CalcularCostoOrdenServicioUseCase, IngestTicketUseCase
@@ -21,7 +22,7 @@ ordenes_router = Router(tags=["ordenes de servicio"])
     operation_id="ingestTicket",
 )
 def ingest_ticket(request: HttpRequest, payload: TicketIngestIn):
-    return 201, IngestTicketUseCase.execute(payload)
+    return 201, IngestTicketUseCase(build_geocoder()).execute(payload)
 
 
 @ordenes_router.post(

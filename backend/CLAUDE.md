@@ -31,8 +31,38 @@ Entre apps: `tracking → logistica → transportista`, y todos → `catalog`. N
 | `users` | `User` (login por email, `username = None`), `Permiso`, `Rol`, `UsuarioRol`, `RolPermiso` | auth (login/logout/me/csrf) | `AUTH_USER_MODEL` y el RBAC. La gestión de roles es sólo por admin. |
 
 `shared/` **no es una app**: es un paquete de soporte (`BaseModel` abstracto,
-`exceptions.py`, `dtos.py`, `xlsx.py`). `routing/` es un directorio vacío reservado para el
-paso 4 y no está en `INSTALLED_APPS`.
+`exceptions.py`, `dtos.py`, `xlsx.py`). `routing/` **tampoco es una app** y no está en
+`INSTALLED_APPS`: no tiene modelos. Hoy sólo aporta la geolocalización de la ingesta, con la
+forma puerto/adaptador que el paso 4 va a reusar para el ruteo:
+
+```
+routing/domain/     ports.py (Protocol Geocoder), values.py (Coordinate, GeocodeQuery), exceptions.py
+routing/adapters/   OpenRouteServiceAdapter
+routing/factory.py  build_geocoder(): elige el adapter según ORS_API_KEY
+```
+
+`build_geocoder()` devuelve un `GeocoderNoConfigurado` cuando falta `ORS_API_KEY`, que levanta
+`RoutingError` en `geocode()`. **Eso es a propósito**: la ingesta ya captura `RoutingError` y
+sigue creando la ubicación sin coordenadas, así que sin ORS el sistema no se cae, sólo deja más
+filas pendientes de validar. Construir el adapter siempre tiraría `RoutingError` en el
+`__init__`, y como **`RoutingError` no hereda de `DomainError`** eso sería un 500 crudo por un
+problema de configuración.
+
+`Coordinate.lat/lng` son `Decimal` y `Point()` de Django **no acepta `Decimal`**: el borde lo
+cruza `Coordinate.to_lnglat()`, que devuelve floats. Pasar `coordinate.lat` directo a
+`_build_coordinates` es un `TypeError`.
+
+**Qué países soporta el geocoder lo decide el adapter, no `GeocodeQuery`.** El DTO sólo limpia
+el string. Si validara ahí, un país no soportado sería un `ValidationError` **de pydantic** —que
+no es `ninja.errors.ValidationError`, así que ningún handler de `core/api_errors.py` lo agarra— y
+terminaría en el handler de `Exception`: 500 y rollback del `@transaction.atomic` de la ingesta
+entera. En el adapter es un `RoutingError`, que el use case ya captura. `normalizar_pais()`
+acepta el ISO y el nombre porque SAP manda uno y `Ubicacion.pais` tiene el otro por default.
+
+**Un destino que no se pudo geolocalizar viaja en `TicketIngestOut.destinos_sin_geolocalizar`**,
+no sólo en un `logger.warning`: es la regla de "nada de fallas silenciosas", y quien dispara la
+ingesta necesita saber qué quedó pendiente de revisar. Igual que `remitos_omitidos`, y `completo`
+mira las dos listas.
 
 `CalcularCostoOrdenServicioUseCase` está en `tracking/use_cases/` y devuelve un DTO de
 `logistica`. Es legal — la dirección `tracking → logistica` lo permite — pero conviene
@@ -63,7 +93,7 @@ saberlo antes de buscarlo en `logistica/`.
 
 ## La API hoy
 
-Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **doce operaciones**:
+Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **trece operaciones**:
 
 | Método | Path | Auth | Entrada | Salida |
 |---|---|---|---|---|
@@ -78,13 +108,37 @@ Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **doce opera
 | GET | `/api/v1/zonas/{id}` | `zonas.ver` | — | 200 `ZonaOut` |
 | PUT | `/api/v1/zonas/{id}` | `zonas.editar` | `ZonaIn` | 200 `ZonaOut` |
 | DELETE | `/api/v1/zonas/{id}` | `zonas.eliminar` | — | 204 |
-| GET | `/api/v1/ubicaciones/` | `ubicaciones.ver` | — | 200 `list[UbicacionOut]` |
+| GET | `/api/v1/ubicaciones/` | `ubicaciones.ver` | `Query[UbicacionesFilters]` | 200 `list[UbicacionOut]` |
+| PUT | `/api/v1/ubicaciones/{id}` | `ubicaciones.editar` | `UbicacionIn` | 200 `UbicacionOut` |
 
 Todas declaran `**ERRORS` (400/401/403/404/409/422/500 → `ErrorOut`). **Zonas y ubicaciones no
 aceptan `X-API-Key`**: son browser-only. La `X-API-Key` quedó exclusivamente para la ingesta y
-el costo de OS, que son máquina-a-máquina. No hay `/health`, no hay paginación y **no hay
-ningún DTO `...Filters` todavía**: los dos GET de lista devuelven el array completo sin
-envelope.
+el costo de OS, que son máquina-a-máquina. No hay `/health` y no hay paginación: los GET de
+lista devuelven el array completo sin envelope.
+
+**`UbicacionesFilters` es el primer y único DTO `...Filters`.** `Query[UbicacionesFilters]` con
+un `pydantic.BaseModel` pelado funciona —no hace falta `ninja.Schema`— y ninja lo aplana en un
+`parameters` por campo **además** de emitir `components.schemas.UbicacionesFilters`, así que el
+frontend lo aliasea por nombre como cualquier otro DTO. Ese component queda **huérfano** (nada
+lo referencia; sobrevive porque el aplanado deja su entrada en `$defs`), así que si algún día
+openapi-typescript poda los no referenciados, el alias del frontend rompe el `tsc`. Falla
+ruidosa, no silenciosa.
+
+Tiene **dos filtros y no son el mismo conjunto**, que es la distinción que importa:
+
+- `validada=False` es la cola que llena la ingesta: coordenadas adivinadas por el geocoder.
+- `con_coordenadas=False` es el atraso que ya existe: `import_ubicaciones` crea filas
+  **validadas y sin punto** cuando el xlsx no trae `lat`/`long`. Son las que hacen fallar
+  `TarifarioService._resolve_por_zona` con `motivo="sin_coordenadas"`, y el filtro de
+  `validada` **no las encuentra**.
+
+Un `?validada=` vacío o con basura da 422 `payload_invalid`; desde la SPA no se llega porque el
+`validateSearch` de la ruta lo neutraliza antes.
+
+**Ubicaciones no tiene alta ni baja**, a propósito: nacen de la ingesta de SAP. El PUT sólo
+toca `nombre`, `tipo` y `coordinates`, y **marca `validada=True`** — editar es revisar. `codigo`
+no es editable porque es la clave con la que `upsert_by_codigo` las reconoce, y la dirección
+tampoco: es la entrada de la geolocalización y el upsert la vuelve a traer de SAP.
 
 La barra final de `/zonas/` y `/ubicaciones/` es obligatoria: con `APPEND_SLASH` un GET sin
 barra redirige 301 y un POST sin barra falla. Los paths con id **no la llevan**.
@@ -244,6 +298,27 @@ con `@property latitud`/`longitud` (`.y`/`.x`), y `Zona.geom` un `PolygonField(s
 Los DTOs `GeoJSONPolygon` y `GeoJSONPoint` usan orden GeoJSON, o sea **`[lng, lat]`**, no al
 revés. Un SRID distinto de 4326 se rechaza con `BusinessRuleError`.
 
+### El upsert de ubicaciones y `validada`
+
+`UbicacionService.upsert_by_codigo` es idempotente **por `codigo` y nada más**. `validada` va en
+`create_defaults` y no en `defaults`, por dos razones distintas:
+
+- Como **lookup** rompía la idempotencia: un desajuste contra la fila guardada daba
+  `DoesNotExist` → INSERT → `IntegrityError` sobre `uq_ubicacion_codigo`, y Django lo re-lanza
+  porque su reintento reusa el mismo lookup malo. Eso abortaba una corrida entera de
+  `import_ubicaciones`, cuyo `except DomainError` no atrapa un `IntegrityError`.
+- En **`defaults`** des-validaría una ubicación que el usuario ya corrigió a mano.
+
+La ingesta crea con `validada=False` **siempre**, también cuando el geocoder respondió: una
+coordenada adivinada es adivinada igual. Es la bandeja de pendientes que consume la pantalla de
+ubicaciones, y el único lugar del sistema que la vacía.
+
+`coordinates` entra en `defaults` **sólo cuando la fuente trae una**. Un xlsx sin `lat`/`long`
+no puede pisar con `NULL` la coordenada que alguien corrigió a mano: dejaría la fila
+`validada=True` y sin punto, o sea fuera de la bandeja de pendientes **y** sin geolocalizar —
+el peor estado posible, y el que hace fallar el costeo por zona. `nombre` y `tipo` sí se
+refrescan desde la planilla, así que una recarga revierte esas dos ediciones.
+
 `Zona.geom` es `PolygonField`, **no MultiPolygon**: una zona es exactamente un polígono, con
 sus anillos interiores si hace falta. Un anillo abierto no se cierra solo — muere en GEOS
 como 422 `business_rule`, así que el cliente manda el primer punto repetido al final.
@@ -330,11 +405,12 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
 
 ## Pendientes conocidos
 
-- **Los tests son los de auth/RBAC (`conftest.py` + `users/tests/`) y los de catalog**
-  (`catalog/tests/`: contratos de zonas y ubicaciones, el `ProtectedError` → 409, el orden
-  `[lng, lat]`, 403-vs-401). `shared/models.py` sigue siendo el código más delicado del repo y
-  sigue sin cobertura propia. Los tests van en un directorio `tests/`, no en un `test_*.py`
-  suelto: el per-file-ignore de `S101` es `*/tests/*`.
+- **Los tests son los de auth/RBAC (`conftest.py` + `users/tests/`), los de catalog y los de
+  la geolocalización de la ingesta** (`tracking/tests/`, con un `Geocoder` falso inyectado para
+  no tocar la red — es para eso que el use case recibe el geocoder por constructor).
+  `shared/models.py` sigue siendo el código más delicado del repo y sigue sin cobertura propia.
+  Los tests van en un directorio `tests/`, no en un `test_*.py` suelto: el per-file-ignore de
+  `S101` es `*/tests/*`.
 - **El management command de la ingesta programada no existe.**
   `tracking/management/commands/` tiene sólo `__init__.py`, así que hoy la única forma de
   disparar la ingesta es el POST. Es el paso 1 sin terminar.
@@ -344,17 +420,33 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
 - `OrdenServicio` sólo tiene dos FKs y algunos flags: sin número, sin estado, sin fechas
   planificadas. El paso 3 necesita al menos estado y fechas.
 - **No hay API de lectura** de tickets, órdenes de servicio, remitos ni transportistas — sólo
-  el admin. Ubicaciones ya tiene la suya, pero es sólo lectura de lista: no hay CRUD.
-- **Sin paginación ni filtros.** `GET /zonas/` devuelve todas las zonas activas con su
-  polígono completo, y `GET /ubicaciones/` **las 1785 filas del seed** en una sola respuesta
-  (~350 KB). Es el primer candidato real a paginar, y a los DTOs `...Filters` que la
-  convención ya nombra — un `con_coordenadas` sería el filtro obvio, porque el mapa sólo
-  dibuja las geolocalizadas.
+  el admin. Ubicaciones tiene lista y PUT, pero no alta ni baja (a propósito: nacen de SAP).
+- **Sin paginación.** `GET /zonas/` devuelve todas las zonas activas con su polígono completo, y
+  `GET /ubicaciones/` **las ~1785 filas del seed** en una sola respuesta (~350 KB). Es el primer
+  candidato real a paginar. `UbicacionesFilters` sólo filtra por `validada`; un `con_coordenadas`
+  sería el próximo filtro obvio, porque el mapa sólo dibuja las geolocalizadas.
 - **`UbicacionOut` expone un subconjunto** de la fila (lo que el mapa necesita más la
   dirección). Agregar campos es aditivo y no rompe al frontend.
+- **`import_ubicaciones` revierte `nombre` y `tipo` editados a mano** (no la coordenada, que
+  está protegida). El xlsx es master para esos dos campos; si molesta, hay que decidir cuál
+  gana y el command tendría que reportar lo que pisó.
+- **`Ubicacion.tipo` es editable y nada revalida los tickets existentes.** Pasar una `planta` a
+  `cliente` hace que la próxima ingesta con ese `planta_codigo` sea rechazada por
+  `TicketService._check_valid_ubicacion` con un 422, sin conexión visible con la edición.
+  Guardarlo en el service obligaría a `catalog` a importar `tracking`, que la dirección de
+  dependencias prohíbe, así que por ahora sólo se avisa en la UI.
+- **`RemitoUbicacionIn` no tiene límites de longitud** (`codigo: str` contra una columna de 20,
+  etc.). Un campo largo de SAP es un `DataError` de Postgres → 500 con rollback, donde debería
+  ser un 422 `payload_invalid`. `CodigoUbicacion` ya existe para esto y se usa en
+  `planta_codigo`, pero no acá.
+- **El mount `./seed:/app/seed:ro` no existe en `docker-compose.yml`**, aunque este documento lo
+  daba por hecho. `import_ubicaciones` sin `--file` busca `/app/seed/locales.xlsx` y falla; hay
+  que pasar `--file` o agregar el mount. `backend/seed/` es el directorio huérfano que dejó ese
+  mount cuando existía.
 - **`ALLOWED_HOSTS` tiene default vacío.** Con `DEBUG=False` y la variable sin setear,
   Django rechaza todo.
 - **No hay `STATIC_ROOT` ni `collectstatic`.** Los estáticos del admin se sirven sólo con
   `runserver` en DEBUG.
-- `routing/` está vacío (ni `__init__.py`) esperando el paso 4. Las credenciales de ORS
-  (`ORS_API_KEY`, `ORS_SNAP_RADIUS_M`) ya están en settings y en compose.
+- `routing/` **sólo tiene geocoding**: `Geocoder` + el adapter de ORS. El paso 4 le suma el
+  ruteo, y ahí entra `ORS_SNAP_RADIUS_M`, que hoy está en settings y en compose **pero no lo
+  lee nadie** (snappear es cosa del ruteo, no del geocoding). `routing/` no tiene tests.

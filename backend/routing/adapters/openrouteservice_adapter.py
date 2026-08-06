@@ -5,9 +5,7 @@ from openrouteservice import exceptions
 
 from routing.domain.exceptions import RoutingError
 from routing.domain.ports import Geocoder
-from routing.domain.values import Coordinate, GeocodeQuery
-
-DEFAULT_SNAP_RADIUS_M = 2000
+from routing.domain.values import Coordinate, GeocodeQuery, normalizar_pais
 
 _ORS_ERRORS = (
     exceptions.ApiError,
@@ -17,27 +15,39 @@ _ORS_ERRORS = (
 )
 
 
-class OpenRouteServiceAdaptar(Geocoder):
-    def __init__(self, api_key: str, snap_radius_m_: int = DEFAULT_SNAP_RADIUS_M):
+class OpenRouteServiceAdapter(Geocoder):
+    def __init__(self, api_key: str):
         if not api_key:
             raise RoutingError(
                 "Es necesaria una api key para usar los servicios de open route service"
             )
 
         self._client = openrouteservice.Client(key=api_key)
-        self._snap_radius_m = snap_radius_m_
 
     def geocode(self, query: GeocodeQuery) -> Coordinate:
+        pais = normalizar_pais(query.pais)
+        if pais is None:
+            raise RoutingError(f"País no soportado para geolocalizar: {query.pais!r}")
+
         try:
             response = self._client.pelias_structured(
                 address=query.direccion,
                 locality=query.localidad,
                 region=query.provincia,
-                country=query.pais,
+                country=pais,
             )
         except _ORS_ERRORS as e:
             raise RoutingError(f"Ocurrio un error al geolocalizar {query.as_text()}") from e
 
         features = response.get("features") or []
         if not features:
-            raise RoutingError(f"Sin coordenadas para {query.as_text()}. Revise ")
+            raise RoutingError(f"Sin coordenadas para {query.as_text()}")
+
+        try:
+            lng, lat = features[0]["geometry"]["coordinates"][:2]
+        except (KeyError, IndexError, TypeError, ValueError) as e:
+            raise RoutingError(
+                f"Respuesta inesperada de open route service para {query.as_text()}"
+            ) from e
+
+        return Coordinate.from_lnglat(lng, lat)

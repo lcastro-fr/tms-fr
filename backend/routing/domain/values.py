@@ -6,6 +6,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 SUPPORTED_COUNTRIES = {"AR": "Argentina"}
 
+_PAISES_ACEPTADOS = dict(SUPPORTED_COUNTRIES) | {
+    nombre.upper(): nombre for nombre in SUPPORTED_COUNTRIES.values()
+}
+
+
+def normalizar_pais(pais: str) -> str | None:
+    return _PAISES_ACEPTADOS.get(pais.strip().upper())
+
 
 class Coordinate(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -32,11 +40,8 @@ class GeocodeQuery(BaseModel):
 
     @field_validator("pais", mode="after")
     @classmethod
-    def validate_pais(cls, value: str) -> str:
-        if value.upper() not in SUPPORTED_COUNTRIES:
-            raise ValueError("El pais no esta soportado para geolocalizacion")
-
-        return SUPPORTED_COUNTRIES[value.upper()]
+    def clean_pais(cls, value: str) -> str:
+        return value.strip()
 
     @field_validator("localidad", mode="after")
     @classmethod

@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints
 
+from catalog.enums import TipoUbicacion
+
 if TYPE_CHECKING:
     from catalog.models import Ubicacion, Zona
 
@@ -51,6 +53,17 @@ class ZonaOut(BaseModel):
         )
 
 
+class UbicacionIn(BaseModel):
+    nombre: str = Field(min_length=1, max_length=120)
+    tipo: TipoUbicacion
+    coordinates: GeoJSONPoint
+
+
+class UbicacionesFilters(BaseModel):
+    validada: bool | None = None
+    con_coordenadas: bool | None = None
+
+
 class UbicacionOut(BaseModel):
     id: int
     tipo: str
@@ -65,7 +78,6 @@ class UbicacionOut(BaseModel):
 
     @classmethod
     def from_model(cls, ubicacion: Ubicacion) -> UbicacionOut:
-        # latitud/longitud son @property de Python y no viajarían solas.
         punto = ubicacion.coordinates
         return cls(
             id=ubicacion.id,

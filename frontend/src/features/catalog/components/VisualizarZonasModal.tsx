@@ -10,7 +10,6 @@ import { useUbicaciones } from "../use-ubicaciones";
 import { CapaUbicaciones } from "./CapaUbicaciones";
 import { ControlUbicaciones } from "./ControlUbicaciones";
 
-// Con más zonas que colores se repiten, y por eso la leyenda no es opcional.
 const TOPE_ETIQUETAS_FIJAS = 5;
 
 type Props = {

@@ -17,10 +17,7 @@ type Props = {
     ubicaciones: UbicacionOut[];
 };
 
-// CircleMarker y no Marker: el ícono default de Leaflet resuelve su URL en runtime y bajo
-// un bundler da 404, o sea marcadores invisibles sin un solo error.
 export function CapaUbicaciones({ ubicaciones }: Props) {
-    // Canvas propio: son ~1800 puntos y el mapa va en SVG para que geoman pueda editar.
     const renderer = useMemo(() => L.canvas({ padding: 0.5 }), []);
 
     return (

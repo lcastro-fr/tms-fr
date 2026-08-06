@@ -1,4 +1,5 @@
 from .ticket_dtos import (
+    DestinoSinGeolocalizarOut,
     RemitoOmitidoOut,
     RemitoUbicacionIn,
     TicketIngestIn,
@@ -7,6 +8,7 @@ from .ticket_dtos import (
 )
 
 __all__ = [
+    "DestinoSinGeolocalizarOut",
     "RemitoOmitidoOut",
     "TicketIngestIn",
     "TicketIngestOut",

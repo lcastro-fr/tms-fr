@@ -163,6 +163,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ubicaciones/{ubicacion_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Corrige una ubicación y la marca como validada */
+        put: operations["actualizarUbicacion"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -194,7 +211,7 @@ export interface components {
          * PermisoCodigo
          * @enum {string}
          */
-        PermisoCodigo: "zonas.ver" | "zonas.crear" | "zonas.editar" | "zonas.eliminar" | "ubicaciones.ver";
+        PermisoCodigo: "zonas.ver" | "zonas.crear" | "zonas.editar" | "zonas.eliminar" | "ubicaciones.ver" | "ubicaciones.editar";
         /** SesionOut */
         SesionOut: {
             /** Id */
@@ -219,6 +236,15 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** DestinoSinGeolocalizarOut */
+        DestinoSinGeolocalizarOut: {
+            /** Codigo */
+            codigo: string;
+            /** Nombre */
+            nombre: string;
+            /** Motivo */
+            motivo: string;
+        };
         /** RemitoOmitidoOut */
         RemitoOmitidoOut: {
             /** Numero */
@@ -238,6 +264,8 @@ export interface components {
             remitos_creados: string[];
             /** Remitos Omitidos */
             remitos_omitidos: components["schemas"]["RemitoOmitidoOut"][];
+            /** Destinos Sin Geolocalizar */
+            destinos_sin_geolocalizar: components["schemas"]["DestinoSinGeolocalizarOut"][];
         };
         /** RemitoUbicacionIn */
         RemitoUbicacionIn: {
@@ -353,6 +381,13 @@ export interface components {
             nombre: string;
             geom: components["schemas"]["GeoJSONPolygon"];
         };
+        /** UbicacionesFilters */
+        UbicacionesFilters: {
+            /** Validada */
+            validada?: boolean | null;
+            /** Con Coordenadas */
+            con_coordenadas?: boolean | null;
+        };
         /** GeoJSONPoint */
         GeoJSONPoint: {
             /**
@@ -385,6 +420,18 @@ export interface components {
             coordinates: components["schemas"]["GeoJSONPoint"] | null;
             /** Validada */
             validada: boolean;
+        };
+        /**
+         * TipoUbicacion
+         * @enum {string}
+         */
+        TipoUbicacion: "planta" | "puerto" | "aeropuerto" | "cliente" | "otro";
+        /** UbicacionIn */
+        UbicacionIn: {
+            /** Nombre */
+            nombre: string;
+            tipo: components["schemas"]["TipoUbicacion"];
+            coordinates: components["schemas"]["GeoJSONPoint"];
         };
     };
     responses: never;
@@ -1330,7 +1377,10 @@ export interface operations {
     };
     listarUbicaciones: {
         parameters: {
-            query?: never;
+            query?: {
+                validada?: boolean | null;
+                con_coordenadas?: boolean | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1344,6 +1394,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UbicacionOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    actualizarUbicacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ubicacion_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UbicacionIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UbicacionOut"];
                 };
             };
             /** @description Bad Request */

@@ -35,7 +35,6 @@ export function ZonaFormModal({ zona, onClose }: Props) {
             nombre: (valor) => (valor.trim() ? null : "Ingresá un nombre"),
             geom: (valor) => {
                 if (!valor) return "Dibujá la zona en el mapa";
-                // Un arrastre puede colapsar dos vértices y dejar un anillo degenerado.
                 return verticesDistintos(valor) >= 3 ? null : "Al menos tres vértices distintos";
             },
         },
@@ -64,8 +63,6 @@ export function ZonaFormModal({ zona, onClose }: Props) {
                 form.setErrors({ nombre: error.message });
                 return;
             }
-            // business_rule lo lee el Alert de abajo; el modal queda abierto con el polígono
-            // dibujado para que el usuario corrija el vértice.
             if (error.code === "business_rule") {
                 return;
             }
@@ -86,8 +83,6 @@ export function ZonaFormModal({ zona, onClose }: Props) {
             onClose={onClose}
             size="80rem"
             title={zona ? `Editar ${zona.nombre}` : "Nueva zona"}
-            // Leaflet y geoman usan Escape para cancelar un vértice: cerrar el modal ahí se
-            // lleva el polígono entero.
             closeOnEscape={false}
             closeOnClickOutside={false}
         >
@@ -140,7 +135,6 @@ export function ZonaFormModal({ zona, onClose }: Props) {
                                 <CapaUbicaciones ubicaciones={ubicaciones.dibujables} />
                             )}
                         </MapaBase>
-                        {/* form.errors.geom no tiene input al que colgarse. */}
                         {form.errors.geom && (
                             <Input.Error mt="xs">{form.errors.geom}</Input.Error>
                         )}

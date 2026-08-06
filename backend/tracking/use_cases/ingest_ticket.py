@@ -9,8 +9,14 @@ from catalog.services import UbicacionService
 from logistica.services import OrdenServicioService
 from routing.domain.exceptions import RoutingError
 from routing.domain.ports import Geocoder
-from routing.domain.values import Coordinate, GeocodeQuery
-from tracking.dtos import RemitoOmitidoOut, RemitoUbicacionIn, TicketIngestIn, TicketIngestOut
+from routing.domain.values import GeocodeQuery, normalizar_pais
+from tracking.dtos import (
+    DestinoSinGeolocalizarOut,
+    RemitoOmitidoOut,
+    RemitoUbicacionIn,
+    TicketIngestIn,
+    TicketIngestOut,
+)
 from tracking.services import RemitoService, TicketService
 from transportista.services import TransportistaService
 
@@ -37,39 +43,47 @@ class IngestTicketUseCase:
 
         creados: list[str] = []
         omitidos: list[RemitoOmitidoOut] = []
+        sin_geolocalizar: list[DestinoSinGeolocalizarOut] = []
 
         for remito in data.remitos:
             destinos_map: dict[str, RemitoUbicacionIn] = {u.codigo: u for u in remito.destinos}
-            destinos, faltantes = UbicacionService.resolve_codigos(destinos_map.keys())
+            destinos, faltantes = UbicacionService.resolve_codigos(list(destinos_map))
 
-            if faltantes:
-                for ubicacion in faltantes:
-                    destino = destinos_map.get(ubicacion)
-                    geocode_query = GeocodeQuery(
-                        direccion=destino.direccion,
-                        localidad=destino.localidad,
-                        provincia=destino.provincia,
-                        pais=destino.provincia,
+            for codigo in faltantes:
+                destino = destinos_map[codigo]
+                geocode_query = GeocodeQuery(
+                    direccion=destino.direccion,
+                    localidad=destino.localidad,
+                    provincia=destino.provincia,
+                    pais=destino.pais,
+                )
+                try:
+                    coordinates = self._geocoder.geocode(query=geocode_query)
+                except RoutingError as exc:
+                    logger.warning("Sin geolocalizar %s: %s", destino.codigo, exc)
+                    coordinates = None
+                    sin_geolocalizar.append(
+                        DestinoSinGeolocalizarOut(
+                            codigo=destino.codigo, nombre=destino.nombre, motivo=str(exc)
+                        )
                     )
-                    try:
-                        coordinates = self._geocoder.geocode(query=geocode_query)
-                    except RoutingError:
-                        coordinates = None
 
-                    # Geocode query tiene algunos cleans de datos
-                    ubicacion_instance, _ = UbicacionService.upsert_by_codigo(
-                        codigo=destino.codigo,
-                        tipo=TipoUbicacion.CLIENTE,
-                        nombre=destino.nombre,
-                        calle=geocode_query.direccion,
-                        localidad=geocode_query.localidad,
-                        provincia=geocode_query.provincia,
-                        pais=geocode_query.pais,
-                        lat=coordinates.lat if coordinates else None,
-                        lng=coordinates.lng if coordinates else None,
-                        validada=False,
-                    )
-                    destinos.append(ubicacion_instance)
+                lng, lat = coordinates.to_lnglat() if coordinates else (None, None)
+
+                # Geocode query tiene algunos cleans de datos
+                ubicacion_instance, _ = UbicacionService.upsert_by_codigo(
+                    codigo=destino.codigo,
+                    tipo=TipoUbicacion.CLIENTE,
+                    nombre=destino.nombre,
+                    calle=geocode_query.direccion,
+                    localidad=geocode_query.localidad,
+                    provincia=geocode_query.provincia,
+                    pais=normalizar_pais(geocode_query.pais) or geocode_query.pais,
+                    lat=lat,
+                    lng=lng,
+                    validada=False,
+                )
+                destinos.append(ubicacion_instance)
 
             try:
                 RemitoService.create_remito(
@@ -93,4 +107,4 @@ class IngestTicketUseCase:
             fecha_egreso=data.fecha_egreso,
         )
 
-        return TicketIngestOut.from_model(ticket, creados, omitidos)
+        return TicketIngestOut.from_model(ticket, creados, omitidos, sin_geolocalizar)

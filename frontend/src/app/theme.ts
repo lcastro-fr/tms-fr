@@ -27,7 +27,6 @@ export const theme = createTheme({
         [GOLD.key]: GOLD.colors,
     },
     other: {
-        // Colores de las zonas superpuestas en el mapa, asignados por posición.
         zonaPalette: [
             "blue",
             "grape",

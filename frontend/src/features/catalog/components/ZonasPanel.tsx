@@ -16,8 +16,6 @@ import { eliminarZona, zonasKeys, zonasQueryOptions } from "../api";
 import type { ZonaOut } from "../api";
 import { zonasColumns } from "../zonas-columns";
 
-// Leaflet + geoman pesan bastante y la tabla no los necesita. Montarlos sólo con el modal
-// abierto es además lo que evita que el mapa se inicialice en un contenedor de 0px.
 const ZonaFormModal = lazy(() =>
     import("./ZonaFormModal").then((m) => ({ default: m.ZonaFormModal })),
 );
@@ -27,7 +25,6 @@ const VisualizarZonasModal = lazy(() =>
     })),
 );
 
-// undefined = cerrado, null = alta, ZonaOut = edición.
 type Editando = ZonaOut | null | undefined;
 
 export function ZonasPanel() {
@@ -47,7 +44,6 @@ export function ZonasPanel() {
     const eliminar = useMutation({
         mutationFn: (zona: ZonaOut) => eliminarZona(zona.id),
         onSuccess: (_, zona) => {
-            // Un id que quedó tildado y ya no existe deja el contador de "Visualizar" mintiendo.
             setSeleccion((previa) => {
                 const resto = { ...previa };
                 delete resto[String(zona.id)];

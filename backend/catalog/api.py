@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from django.http import HttpRequest
-from ninja import Router
+from ninja import Query, Router
 
-from catalog.dtos import UbicacionOut, ZonaIn, ZonaOut
+from catalog.dtos import UbicacionesFilters, UbicacionIn, UbicacionOut, ZonaIn, ZonaOut
 from catalog.use_cases import (
+    ActualizarUbicacionUseCase,
     ActualizarZonaUseCase,
     CrearZonaUseCase,
     EliminarZonaUseCase,
@@ -83,5 +84,16 @@ def eliminar_zona(request: HttpRequest, zona_id: int):
     summary="Lista las ubicaciones activas",
     operation_id="listarUbicaciones",
 )
-def listar_ubicaciones(request: HttpRequest):
-    return 200, ListarUbicacionesUseCase.execute()
+def listar_ubicaciones(request: HttpRequest, filters: Query[UbicacionesFilters]):
+    return 200, ListarUbicacionesUseCase.execute(filters)
+
+
+@ubicaciones_router.put(
+    "/{int:ubicacion_id}",
+    response={200: UbicacionOut, **ERRORS},
+    auth=SessionAuth(PermisoCodigo.UBICACIONES_EDITAR),
+    summary="Corrige una ubicación y la marca como validada",
+    operation_id="actualizarUbicacion",
+)
+def actualizar_ubicacion(request: HttpRequest, ubicacion_id: int, payload: UbicacionIn):
+    return 200, ActualizarUbicacionUseCase.execute(ubicacion_id, payload)

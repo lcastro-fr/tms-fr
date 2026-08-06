@@ -19,7 +19,10 @@ type ItemDeNav = {
     permiso: PermisoCodigo;
 };
 
-const NAV: ItemDeNav[] = [{ label: "Zonas", to: "/zonas", permiso: "zonas.ver" }];
+const NAV: ItemDeNav[] = [
+    { label: "Zonas", to: "/zonas", permiso: "zonas.ver" },
+    { label: "Ubicaciones", to: "/ubicaciones", permiso: "ubicaciones.ver" },
+];
 
 function AuthenticatedLayout() {
     const [abierto, { toggle }] = useDisclosure();

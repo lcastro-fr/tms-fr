@@ -1,4 +1,5 @@
 export {
+    actualizarUbicacion,
     actualizarZona,
     crearZona,
     eliminarZona,
@@ -8,5 +9,16 @@ export {
     zonasKeys,
     zonasQueryOptions,
 } from "./api";
-export type { GeoJSONPolygon, UbicacionOut, ZonaIn, ZonaOut } from "./api";
+export type {
+    GeoJSONPoint,
+    GeoJSONPolygon,
+    TipoUbicacion,
+    UbicacionIn,
+    UbicacionOut,
+    UbicacionesFilters,
+    UbicacionesSeleccion,
+    ZonaIn,
+    ZonaOut,
+} from "./api";
+export { UbicacionesPanel } from "./components/UbicacionesPanel";
 export { ZonasPanel } from "./components/ZonasPanel";

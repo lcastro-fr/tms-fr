@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedUbicacionesRouteImport } from './routes/_authenticated/ubicaciones'
 import { Route as AuthenticatedZonasRouteImport } from './routes/_authenticated/zonas'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
@@ -28,6 +29,12 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedUbicacionesRoute =
+  AuthenticatedUbicacionesRouteImport.update({
+    id: '/ubicaciones',
+    path: '/ubicaciones',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedZonasRoute = AuthenticatedZonasRouteImport.update({
   id: '/zonas',
   path: '/zonas',
@@ -37,10 +44,12 @@ const AuthenticatedZonasRoute = AuthenticatedZonasRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/login': typeof LoginRoute
+  '/ubicaciones': typeof AuthenticatedUbicacionesRoute
   '/zonas': typeof AuthenticatedZonasRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/ubicaciones': typeof AuthenticatedUbicacionesRoute
   '/zonas': typeof AuthenticatedZonasRoute
   '/': typeof AuthenticatedIndexRoute
 }
@@ -48,18 +57,20 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
+  '/_authenticated/ubicaciones': typeof AuthenticatedUbicacionesRoute
   '/_authenticated/zonas': typeof AuthenticatedZonasRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/zonas'
+  fullPaths: '/' | '/login' | '/ubicaciones' | '/zonas'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/zonas' | '/'
+  to: '/login' | '/ubicaciones' | '/zonas' | '/'
   id:
     | '__root__'
     | '/_authenticated'
     | '/login'
+    | '/_authenticated/ubicaciones'
     | '/_authenticated/zonas'
     | '/_authenticated/'
   fileRoutesById: FileRoutesById
@@ -92,6 +103,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/ubicaciones': {
+      id: '/_authenticated/ubicaciones'
+      path: '/ubicaciones'
+      fullPath: '/ubicaciones'
+      preLoaderRoute: typeof AuthenticatedUbicacionesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/zonas': {
       id: '/_authenticated/zonas'
       path: '/zonas'
@@ -103,11 +121,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedUbicacionesRoute: typeof AuthenticatedUbicacionesRoute
   AuthenticatedZonasRoute: typeof AuthenticatedZonasRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedUbicacionesRoute: AuthenticatedUbicacionesRoute,
   AuthenticatedZonasRoute: AuthenticatedZonasRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }

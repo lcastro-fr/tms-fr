@@ -15,11 +15,10 @@ El frontend va detrás del backend, no delante. **Sólo se construyen pantallas 
 endpoints que existen.** Nada de inventar rutas ni mockear respuestas para adelantar UI:
 si falta el endpoint, el trabajo es en `../backend`.
 
-Hoy la API tiene doce operaciones: cuatro de auth, cinco del CRUD de zonas
-(`/api/v1/zonas/`), la lista de ubicaciones (`/api/v1/ubicaciones/`) y dos de máquina. Zonas es
-la única pantalla de dominio que se puede hacer de punta a punta, y ubicaciones alcanza para la
-capa de puntos del mapa pero no para una pantalla propia. Tickets y órdenes de servicio sólo
-tienen endpoints de escritura pensados para máquina (la ingesta desde SAP y el cálculo de
+Hoy la API tiene trece operaciones: cuatro de auth, cinco del CRUD de zonas
+(`/api/v1/zonas/`), dos de ubicaciones (`/api/v1/ubicaciones/`, lista con filtro y PUT) y dos de
+máquina. Zonas y ubicaciones son las dos pantallas de dominio. Tickets y órdenes de servicio
+sólo tienen endpoints de escritura pensados para máquina (la ingesta desde SAP y el cálculo de
 costo); les falta API de lectura.
 
 ## Arquitectura
@@ -176,10 +175,33 @@ en `http.ts`: eso cerraría el ciclo `router → routes → features → api →
 - **Hoy todo es client-side** (`getSortedRowModel`, `getFilteredRowModel`,
   `getPaginationRowModel`). Es correcto: la API no tiene paginación ni filtros y
   `list[ZonaOut]` es el array completo.
-- Cuando el backend gane paginación y sus DTOs `...Filters`, se pasa a `manualPagination`
-  / `manualSorting` / `manualFiltering`, y el estado de la tabla sube a los search params
-  de la ruta para volverse la entrada del `queryOptions`. Está escrito acá para que sea
-  una migración prevista y no un refactor sorpresa.
+- **Ubicaciones ya hizo esa migración a medias, y es el molde.** Sus dos filtros son
+  server-side (`UbicacionesFilters`), y el estado vive en los **search params de la ruta**:
+  `validateSearch` los tipa, `loaderDeps` hace que el loader se rehaga al cambiarlos, y el mismo
+  objeto es la entrada de `ubicacionesQueryOptions(filters)`. Así el filtro es linkeable y
+  sobrevive un refresh. El sorting y la paginación siguen client-side porque el backend todavía
+  no los tiene.
+- **`loaderDeps` enumera los campos, no devuelve `search` entero.** Con `search` completo,
+  cualquier param futuro se vuelve dep del loader y mintea un match nuevo aunque el backend no
+  filtre por él.
+- **El tipo del search es más angosto que el DTO** (`UbicacionesSeleccion`, sin `null`). El DTO
+  viene de un `bool | None` de pydantic, y un `null` daría una entrada de cache duplicada
+  (`hashChei` no lo colapsa como al `undefined`) más un `?validada=null` que vuelve como el
+  **string** `"null"`.
+- El booleano en la URL **no necesita serializador custom**: el `parseSearch` por default de
+  TanStack es `parseSearchWith(JSON.parse)`, y su `qss.toValue` ya mapea `"false"`/`"true"`.
+- **La tabla no se vacía al togglear el filtro, y no es por `placeholderData`.** `stores.matches`
+  se cambia por las pending recién dentro de `onReady`, o sea después de que resolvió el loader,
+  así que la tabla vieja sigue montada; y como ninguna ruta define `remountDeps`, el `key` del
+  componente no cambia y React preserva la instancia (el sorting de `DataTable` sobrevive).
+  `placeholderData: keepPreviousData` **no serviría**: `useSuspenseQuery` lo pisa con `undefined`.
+- **`Route.useSearch()` va por detrás durante la navegación.** Lee la match ya commiteada, que
+  se commitea recién con el loader resuelto, así que un control atado a él no se mueve por
+  300-400 ms y parece muerto. El estado visual del `Switch` sale de
+  `useRouterState({ select: s => s.location.search })`, y el `isLoading` del mismo hook prende un
+  `Loader` al lado.
+- Cuando el backend gane paginación, se pasa a `manualPagination` / `manualSorting` /
+  `manualFiltering` con el mismo mecanismo.
 
 ## Mapa
 
@@ -215,9 +237,19 @@ confinada a `components/` y a `EditorPolygono`. Los componentes declarativos (`P
   `pm:create` y `pm:remove` llegan al mapa. Escuchar `pm:update` en el mapa hace que editar una
   zona no llegue nunca al formulario y que el `PUT` guarde la geometría vieja, **sin un solo
   error** — está cubierto por `EditorPolygono.test.tsx`.
-- **`CircleMarker`, no `Marker`.** El ícono default de Leaflet resuelve su URL en runtime y
-  bajo un bundler da 404: marcadores invisibles, sin error. `CircleMarker` es un `<circle>` y
-  no usa imágenes.
+- **Nunca el ícono default de un `Marker`.** Leaflet resuelve su URL en runtime y bajo un
+  bundler da 404: marcadores invisibles, sin un solo error. Hay dos salidas según el caso, y las
+  dos están en uso: `CapaUbicaciones` usa **`CircleMarker`** (un `<circle>`, sin imágenes) para
+  sus ~1800 puntos, y `SelectorPunto` usa un **`L.divIcon`** con una clase de CSS module porque
+  necesita que el marcador sea arrastrable, cosa que un `CircleMarker` no puede. `divIcon` es lo
+  que usa geoman para sus propios handles de vértice.
+- **En la clase de un `divIcon` no va `transform`.** Leaflet escribe `translate3d()` **inline**
+  sobre ese mismo elemento (`DomUtil.setPosition` desde `Marker._setPos`) y un estilo inline le
+  gana a cualquier clase sin `!important`. Un pin con `rotate(-45deg)` se ve como un cuadrado, en
+  silencio y sólo en el browser (en jsdom `Browser.any3d` es `false` y posiciona con `left`/`top`,
+  así que el test no lo ve). Por eso el marcador es un círculo, que además deja el `iconAnchor`
+  sin ambigüedad. El tamaño también lo escribe Leaflet inline desde `iconSize`: declararlo en el
+  CSS es código muerto.
 - **`preferCanvas` en el mapa está prohibido, y no es una preferencia.** Geoman resuelve el
   elemento DOM de la capa con `layer._path ? layer._path : layer._renderer._container`, y con
   el renderer de canvas un `Polygon` **no tiene `_path`**. Combinado con un teardown después
@@ -235,6 +267,12 @@ confinada a `components/` y a `EditorPolygono`. Los componentes declarativos (`P
   monta antes de que el contenedor tenga tamaño: `MapaBase` lo resuelve con un
   `requestAnimationFrame` más un `ResizeObserver` — el mismo mock de `test/setup.ts` que estaba
   ahí sólo para Mantine.
+- **`app/router.tsx` define un `defaultPendingComponent`, y no es cosmético.** Sin él no hay
+  **un solo** Suspense boundary en el árbol: `MatchView` resuelve a `SafeFragment` salvo que la
+  ruta declare `pendingComponent`, `wrapInSuspense` o `errorComponent`. Hoy nada suspende porque
+  cada loader hace `ensureQueryData` de la misma key que el componente pide con
+  `useSuspenseQuery`, pero el primer desajuste entre las dos sería pantalla en blanco con un
+  "component suspended but no fallback" en consola, no un spinner.
 - **Los modales con mapa van `React.lazy` y se montan sólo abiertos.** Leaflet + geoman + su
   CSS no tienen por qué pesar en la pantalla de la tabla, y montar el mapa recién al abrir es
   también parte del arreglo del contenedor en 0 px.
@@ -356,6 +394,8 @@ Los tres archivos de test cubren exactamente lo que es silencioso cuando se romp
 - `src/features/catalog/components/EditorPolygono.test.tsx` — el cableado de geoman: montar y
   desmontar con los modos activos, y que los eventos de edición lleguen al `onChange`. Monta
   Leaflet de verdad con un `getBoundingClientRect` falso.
+- `src/components/SelectorPunto.test.tsx` — el click del mapa emite `[lng, lat]`, y el marcador
+  es arrastrable y **no** usa el ícono default (`icon.options.iconUrl` tiene que ser `undefined`).
 
 **El límite de jsdom con el mapa:** nada que use el renderer de canvas se puede testear —
 `getContext()` devuelve `null` y muere en `clearRect`. Por eso el error de `classList` de
@@ -364,12 +404,19 @@ el cableado, no el render.
 
 ## Pendientes conocidos
 
-- **`/zonas` es la única pantalla de dominio.** Alta, edición y baja con mapa, más la capa
-  opcional de ubicaciones. No hay pantalla de ubicaciones: la API es sólo lista.
-- **Las ubicaciones no se paginan ni se filtran del lado del servidor**, así que la capa baja
-  las 1785 filas del seed y descarta en el cliente las que no tienen coordenadas — mostrando
-  cuántas fueron, que es lo que evita que sea un descarte silencioso. Cuando el backend gane
-  `UbicacionesFilters`, el filtro se va para allá.
+- **Hay dos pantallas de dominio: `/zonas` y `/ubicaciones`.** Zonas tiene alta, edición y baja
+  con mapa, más la capa opcional de puntos. Ubicaciones tiene **sólo edición** —nacen de la
+  ingesta de SAP— con dos filtros (pendientes de validar, sin coordenada) y el punto elegido en
+  el mapa.
+- **La tabla de ubicaciones no tiene búsqueda por texto.** Son ~1785 filas en 90 páginas de 20,
+  así que encontrar un código puntual es incómodo. `DataTable` ya cablea `getFilteredRowModel()`
+  pero no expone estado de `globalFilter`; agregarlo es client-side y sin costo de backend.
+- **Editar una ubicación la marca como validada**, y por eso el botón dice "Guardar y validar".
+  La dirección se muestra read-only: es la referencia para saber dónde va el punto, pero
+  corregirla sería re-geolocalizar y el upsert de SAP la vuelve a traer.
+- **Las ubicaciones no se paginan**, así que la capa de puntos del mapa de zonas baja las ~1785
+  filas y descarta en el cliente las que no tienen coordenadas — mostrando cuántas fueron, que es
+  lo que evita que sea un descarte silencioso.
 - **`react-hooks/incompatible-library` avisa sobre `useReactTable`** en `DataTable`: el React
   Compiler no puede memoizar lo que devuelve TanStack Table. Es un warning inherente a la
   librería, no algo por arreglar.

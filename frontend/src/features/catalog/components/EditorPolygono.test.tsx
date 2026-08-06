@@ -21,7 +21,6 @@ const CUADRADO = {
 };
 
 beforeAll(() => {
-    // jsdom mide todo en cero y Leaflet necesita un tamaño para proyectar.
     Element.prototype.getBoundingClientRect = function () {
         return { width: 800, height: 600, top: 0, left: 0, bottom: 600, right: 800, x: 0, y: 0 };
     } as never;
@@ -59,9 +58,6 @@ function poligonoDelMapa(map: L.Map): L.Polygon {
 
 describe("EditorPolygono", () => {
     it("se desmonta sin tocar el mapa que MapContainer ya destruyó", () => {
-        // React corre el cleanup del padre antes que el del hijo, así que MapaBase hace
-        // map.remove() y recién después corre este cleanup: llamar pm.removeControls() ahí
-        // rompía con "Cannot read properties of undefined (reading 'classList')".
         const errores: unknown[] = [];
         const spy = vi.spyOn(console, "error").mockImplementation((...args) => errores.push(args));
 
@@ -73,9 +69,6 @@ describe("EditorPolygono", () => {
     });
 
     it("se desmonta con el modo edición todavía activo", () => {
-        // El flujo real: se toca Editar, se arrastra un vértice y se guarda sin apagar el
-        // modo. El modal cierra, MapContainer mata el mapa y geoman todavía tiene que
-        // desarmar sus handles y su hint marker.
         const { map, unmount } = montar(CUADRADO, () => {});
         map.pm.enableGlobalEditMode();
 
@@ -90,8 +83,6 @@ describe("EditorPolygono", () => {
     });
 
     it("escucha los eventos de edición en la capa, no en el mapa", () => {
-        // Geoman dispara pm:update sobre la capa. Con los listeners en el mapa esto no
-        // llegaba nunca al formulario y el PUT guardaba la geometría vieja, sin error.
         const onChange = vi.fn();
         const { map } = montar(CUADRADO, onChange);
 

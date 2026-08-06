@@ -9,9 +9,6 @@ import { EncuadrarEn } from "../../../components/EncuadrarEn";
 import { aLatLngs, boundsDe, cerrarAnillos } from "../../../lib/geojson";
 import type { GeoJSONPolygon } from "../api";
 
-// Geoman dispara los eventos de edición sobre la capa y no sobre el mapa. Escucharlos en el
-// mapa hace que arrastrar un vértice no llegue nunca al formulario y que el PUT guarde la
-// geometría vieja, sin un solo error. Sólo pm:create y pm:remove van en el mapa.
 const EVENTOS_DE_EDICION = [
     "pm:update",
     "pm:dragend",
@@ -31,7 +28,6 @@ type Props = {
 export function EditorPolygono({ valor, onChange, onMultiPolygon }: Props) {
     const map = useMap();
     const capa = useRef<L.Polygon | null>(null);
-    // La geometría de arranque se congela: después la manda geoman, no el prop.
     const [inicial] = useState(valor);
     const callbacks = useRef({ onChange, onMultiPolygon });
 
@@ -56,8 +52,6 @@ export function EditorPolygono({ valor, onChange, onMultiPolygon }: Props) {
             dragMode: true,
             removalMode: true,
             rotateMode: false,
-            // Circle y CircleMarker exportan un Point, y cutPolygon puede partir la zona en
-            // un MultiPolygon: el modelo guarda exactamente un Polygon.
             drawMarker: false,
             drawCircle: false,
             drawCircleMarker: false,
@@ -92,7 +86,6 @@ export function EditorPolygono({ valor, onChange, onMultiPolygon }: Props) {
         const usarCapa = (poligono: L.Polygon, emitirAhora: boolean) => {
             const anterior = capa.current;
             if (anterior) {
-                // Geoman no tiene modo "una sola figura": la nueva reemplaza a la anterior.
                 dejarDeEscuchar(anterior);
                 anterior.remove();
             }
@@ -119,9 +112,6 @@ export function EditorPolygono({ valor, onChange, onMultiPolygon }: Props) {
         map.on("pm:remove", alBorrar);
 
         if (inicial) {
-            // El anillo de GeoJSON repite el primer punto al final y Leaflet cierra solo:
-            // dejarlo apila dos handles sobre el primer vértice, y arrastrar uno corrompe el
-            // anillo sin avisar. La geometría inicial ya está en el form, así que no se emite.
             const anillos = aLatLngs(inicial).map((anillo) => anillo.slice(0, -1));
             usarCapa(L.polygon(anillos).addTo(map), false);
         }
@@ -133,9 +123,6 @@ export function EditorPolygono({ valor, onChange, onMultiPolygon }: Props) {
 
             const actual = capa.current;
             capa.current = null;
-            // MapContainer destruye el mapa en su propio cleanup y React corre el del padre
-            // antes que el del hijo, así que acá el mapa ya puede estar muerto. Tocar pm
-            // entonces rompe con "Cannot read properties of undefined (reading 'classList')".
             if (!vivo) {
                 return;
             }
