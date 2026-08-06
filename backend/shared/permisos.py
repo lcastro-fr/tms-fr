@@ -8,6 +8,8 @@ class PermisoCodigo(StrEnum):
     ZONAS_VER = "zonas.ver"
     ZONAS_CREAR = "zonas.crear"
     ZONAS_EDITAR = "zonas.editar"
+    ZONAS_ELIMINAR = "zonas.eliminar"
+    UBICACIONES_VER = "ubicaciones.ver"
 
 
 PERMISO_CHOICES = [(p.value, p.value) for p in PermisoCodigo]
@@ -16,4 +18,6 @@ PERMISO_DESCRIPCIONES: dict[PermisoCodigo, str] = {
     PermisoCodigo.ZONAS_VER: "Ver zonas",
     PermisoCodigo.ZONAS_CREAR: "Crear zonas",
     PermisoCodigo.ZONAS_EDITAR: "Editar zonas",
+    PermisoCodigo.ZONAS_ELIMINAR: "Eliminar zonas",
+    PermisoCodigo.UBICACIONES_VER: "Ver ubicaciones",
 }

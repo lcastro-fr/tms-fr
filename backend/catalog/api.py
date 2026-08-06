@@ -3,10 +3,12 @@ from __future__ import annotations
 from django.http import HttpRequest
 from ninja import Router
 
-from catalog.dtos import ZonaIn, ZonaOut
+from catalog.dtos import UbicacionOut, ZonaIn, ZonaOut
 from catalog.use_cases import (
     ActualizarZonaUseCase,
     CrearZonaUseCase,
+    EliminarZonaUseCase,
+    ListarUbicacionesUseCase,
     ListarZonasUseCase,
     ObtenerZonaUseCase,
 )
@@ -15,6 +17,7 @@ from shared.dtos import ERRORS
 from shared.permisos import PermisoCodigo
 
 zonas_router = Router(tags=["zonas"])
+ubicaciones_router = Router(tags=["ubicaciones"])
 
 
 @zonas_router.get(
@@ -59,3 +62,26 @@ def obtener_zona(request: HttpRequest, zona_id: int):
 )
 def actualizar_zona(request: HttpRequest, zona_id: int, payload: ZonaIn):
     return 200, ActualizarZonaUseCase.execute(zona_id, payload)
+
+
+@zonas_router.delete(
+    "/{int:zona_id}",
+    response={204: None, **ERRORS},
+    auth=SessionAuth(PermisoCodigo.ZONAS_ELIMINAR),
+    summary="Da de baja lógica una zona",
+    operation_id="eliminarZona",
+)
+def eliminar_zona(request: HttpRequest, zona_id: int):
+    EliminarZonaUseCase.execute(zona_id)
+    return 204, None
+
+
+@ubicaciones_router.get(
+    "/",
+    response={200: list[UbicacionOut], **ERRORS},
+    auth=SessionAuth(PermisoCodigo.UBICACIONES_VER),
+    summary="Lista las ubicaciones activas",
+    operation_id="listarUbicaciones",
+)
+def listar_ubicaciones(request: HttpRequest):
+    return 200, ListarUbicacionesUseCase.execute()

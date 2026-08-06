@@ -5,6 +5,7 @@ import json
 from django.contrib.gis.gdal import GDALException
 from django.contrib.gis.geos import GEOSException, GEOSGeometry, MultiPoint, Point, Polygon
 from django.db import IntegrityError, transaction
+from django.db.models import ProtectedError
 
 from catalog.enums import SRID_WGS84
 from catalog.models import Ubicacion, Zona
@@ -19,6 +20,9 @@ class ZonaService:
         pass
 
     class ZonaAlreadyExistsError(ConflictError):
+        pass
+
+    class ZonaEnUsoError(ConflictError):
         pass
 
     @staticmethod
@@ -119,3 +123,14 @@ class ZonaService:
                 detail={"nombre": nombre},
             ) from exc
         return zona
+
+    @staticmethod
+    def delete_zona(zona: Zona) -> None:
+        try:
+            with transaction.atomic():
+                zona.delete()
+        except ProtectedError as exc:
+            raise ZonaService.ZonaEnUsoError(
+                f"La zona {zona.nombre} tiene tarifas de flete asociadas",
+                detail={"nombre": zona.nombre, "tarifas_flete": len(exc.protected_objects)},
+            ) from exc

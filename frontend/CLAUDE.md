@@ -7,6 +7,7 @@ están en `../backend/CLAUDE.md`.
 
 Stack: React 19 + TypeScript 6 + Vite 8. Mantine 9 (core, dates, form, hooks, modals,
 notifications). TanStack Router 1 (file-based), Query 5, Table 8. axios 1. dayjs.
+Leaflet 1.9 + react-leaflet 5 + geoman para el mapa de zonas.
 
 ## Alcance
 
@@ -14,11 +15,12 @@ El frontend va detrás del backend, no delante. **Sólo se construyen pantallas 
 endpoints que existen.** Nada de inventar rutas ni mockear respuestas para adelantar UI:
 si falta el endpoint, el trabajo es en `../backend`.
 
-Hoy la API tiene diez operaciones: cuatro de auth, cuatro del CRUD de zonas
-(`/api/v1/zonas/`) y dos de máquina. Zonas es la única pantalla de dominio que se puede
-hacer de punta a punta. Tickets y órdenes de servicio sólo tienen endpoints de escritura
-pensados para máquina (la ingesta desde SAP y el cálculo de costo); les falta API de
-lectura.
+Hoy la API tiene doce operaciones: cuatro de auth, cinco del CRUD de zonas
+(`/api/v1/zonas/`), la lista de ubicaciones (`/api/v1/ubicaciones/`) y dos de máquina. Zonas es
+la única pantalla de dominio que se puede hacer de punta a punta, y ubicaciones alcanza para la
+capa de puntos del mapa pero no para una pantalla propia. Tickets y órdenes de servicio sólo
+tienen endpoints de escritura pensados para máquina (la ingesta desde SAP y el cálculo de
+costo); les falta API de lectura.
 
 ## Arquitectura
 
@@ -42,9 +44,15 @@ Anatomía de un feature:
 features/catalog/
   api.ts             queryOptions y mutations. El único lugar que escribe URLs.
   zonas-columns.tsx  column defs de TanStack Table
+  use-ubicaciones.ts la capa opcional de puntos: permiso + toggle + query
   components/        formularios y vistas del dominio
   index.ts           la única superficie pública
 ```
+
+`features/catalog` importa `features/auth` por su `index.ts`, para `usePermisos()` y `<Can>`.
+Es legal: la dirección única de dependencias ordena la cadena de dominio
+(`tracking → logistica → transportista → catalog`), y `auth` no está en esa cadena — es
+infraestructura transversal.
 
 `features/` espeja las apps del backend que exponen dominio, y hereda **la misma
 dirección única de dependencias**: `tracking → logistica → transportista`, y todos →
@@ -173,6 +181,73 @@ en `http.ts`: eso cerraría el ciclo `router → routes → features → api →
   de la ruta para volverse la entrada del `queryOptions`. Está escrito acá para que sea
   una migración prevista y no un refactor sorpresa.
 
+## Mapa
+
+Leaflet + react-leaflet + geoman, con tiles de OpenStreetMap. El reparto es por **lo que cada
+componente sabe**, no por lo que dibuja: `components/` no conoce dominio, así que
+`MapaBase` (contenedor + tiles) y `EncuadrarEn` (`fitBounds`) viven ahí, y todo lo que toca un
+`ZonaOut` o un `UbicacionOut` vive en `features/catalog/components/`. Un `GeoJSONPolygon` no es
+vocabulario de dominio sino un formato de intercambio, y `components/ → api/` va en el
+sentido de la flecha, así que importar el tipo generado desde `components/` o `lib/` es legal.
+
+**La regla que hace que cambiar de librería de mapas sea acotado:** la API imperativa de
+Leaflet — la instancia del mapa, `map.pm.*`, `invalidateSize`, `fitBounds`, `L.*` — queda
+confinada a `components/` y a `EditorPolygono`. Los componentes declarativos (`Polygon`,
+`CircleMarker`, `Tooltip`) se usan desde cualquier feature, igual que los de Mantine.
+
+- **`[lng, lat]` de GeoJSON vs `[lat, lng]` de Leaflet.** Toda la conversión está en
+  `lib/geojson.ts`, que **no importa leaflet** y por eso es lo único del mapa con tests. Es el
+  error más caro del feature porque es silencioso: un polígono invertido se dibuja sin un solo
+  error, en otro continente.
+- **Para guardar se usa `layer.toGeoJSON()`, nunca `getLatLngs()`.** `toGeoJSON()` emite
+  `[lng, lat]` y cierra el anillo; `getLatLngs()` devuelve objetos `{lat, lng}` y **sin** el
+  punto de cierre. `cerrarAnillos()` lo garantiza igual, porque el backend rechaza un anillo
+  abierto con 422.
+- **Al dibujar una zona existente para editarla se descarta el vértice de cierre.** Leaflet
+  cierra los anillos solo; dejarlo apila dos handles de vértice sobre el primer punto, y
+  arrastrar uno corrompe el anillo sin avisar.
+- **Una zona es un solo `Polygon`.** `pm:create` reemplaza la figura anterior, y `cutPolygon`
+  está apagado: un corte que parte la zona en dos produce un `MultiPolygon` que
+  `Zona.geom` no puede guardar. `drawCircle`/`drawCircleMarker` también están apagados porque
+  exportan un `Point`.
+- **Los eventos de edición se escuchan en la capa, no en el mapa.** `_fireUpdate` y
+  `_fireDragEnd` de geoman hacen `layer.fire(type, data, false)`: sin propagación. Sólo
+  `pm:create` y `pm:remove` llegan al mapa. Escuchar `pm:update` en el mapa hace que editar una
+  zona no llegue nunca al formulario y que el `PUT` guarde la geometría vieja, **sin un solo
+  error** — está cubierto por `EditorPolygono.test.tsx`.
+- **`CircleMarker`, no `Marker`.** El ícono default de Leaflet resuelve su URL en runtime y
+  bajo un bundler da 404: marcadores invisibles, sin error. `CircleMarker` es un `<circle>` y
+  no usa imágenes.
+- **`preferCanvas` en el mapa está prohibido, y no es una preferencia.** Geoman resuelve el
+  elemento DOM de la capa con `layer._path ? layer._path : layer._renderer._container`, y con
+  el renderer de canvas un `Polygon` **no tiene `_path`**. Combinado con un teardown después
+  de `map.remove()` —que hace `delete renderer._container`— eso da
+  `Cannot read properties of undefined (reading 'classList')` al cerrar el modal de una zona
+  editada. El mapa va en SVG y `CapaUbicaciones` se trae **su propio** `L.canvas()` para sus
+  ~1800 puntos: cada uno tiene el renderer que le corresponde.
+- **El cleanup del editor no puede asumir que el mapa está vivo.** React corre el cleanup del
+  padre antes que el del hijo, así que `MapContainer` ya hizo `map.remove()` cuando corre el
+  de `EditorPolygono`. Un flag sobre el evento `unload` del mapa decide si se puede llamar a
+  `map.pm.removeControls()`; llamarlo sobre un mapa muerto es la otra mitad del error de
+  `classList`.
+- **`MapContainer` sin altura explícita mide 0 px** y el mapa "no aparece". La altura sale de
+  un CSS module. Adentro de un `Modal` hace falta además `invalidateSize()`, porque el mapa se
+  monta antes de que el contenedor tenga tamaño: `MapaBase` lo resuelve con un
+  `requestAnimationFrame` más un `ResizeObserver` — el mismo mock de `test/setup.ts` que estaba
+  ahí sólo para Mantine.
+- **Los modales con mapa van `React.lazy` y se montan sólo abiertos.** Leaflet + geoman + su
+  CSS no tienen por qué pesar en la pantalla de la tabla, y montar el mapa recién al abrir es
+  también parte del arreglo del contenedor en 0 px.
+- **`closeOnEscape={false}` en el modal del formulario.** Leaflet y geoman usan Escape para
+  cancelar un vértice; con el default, la primera vez que alguien lo aprieta se cierra el modal
+  y se lleva el polígono entero.
+- El CSS de Leaflet lo importa `MapaBase` y el de geoman `EditorPolygono`, no `main.tsx`: así
+  viaja en el chunk del mapa. Es CSS de librería, la única excepción a "nada de CSS global por
+  componente".
+- El template de tiles es una constante en `MapaBase`. La atribución de OSM es obligatoria por
+  su licencia, y su servidor de tiles es una cortesía con política de uso: si el volumen crece,
+  se cambia esa constante.
+
 ## Auth y permisos
 
 **El `X-API-Key` no se toca desde el browser.** Autoriza escrituras y ponerlo en el bundle
@@ -269,17 +344,35 @@ vitest + Testing Library, entorno `jsdom`, configurado en `vite.config.ts`.
 
 `src/test/setup.ts` mockea `matchMedia` y `ResizeObserver`: **jsdom no los implementa y
 Mantine los consulta**, así que sin esos mocks cualquier render con `MantineProvider`
-explota. Es la única razón por la que existe ese archivo.
+explota. El mock de `ResizeObserver` dejó de ser sólo de Mantine: `MapaBase` lo usa para su
+`invalidateSize`, así que sacarlo ahora rompe el mapa también.
 
-El test que hay (`src/app/providers.test.tsx`) es un smoke test del árbol de providers:
-verifica que Mantine renderice y que el `queryClient` llegue a los hijos. Es barato y
-atrapa justo lo que es silencioso cuando se rompe.
+Los tres archivos de test cubren exactamente lo que es silencioso cuando se rompe:
+
+- `src/app/providers.test.tsx` — smoke test del árbol de providers.
+- `src/lib/geojson.test.ts` — las conversiones `[lng,lat]`↔`[lat,lng]` y el cierre de anillos.
+  Es el que más paga: `lib/geojson.ts` no importa leaflet, y un polígono invertido se dibuja
+  en otro continente sin tirar un error.
+- `src/features/catalog/components/EditorPolygono.test.tsx` — el cableado de geoman: montar y
+  desmontar con los modos activos, y que los eventos de edición lleguen al `onChange`. Monta
+  Leaflet de verdad con un `getBoundingClientRect` falso.
+
+**El límite de jsdom con el mapa:** nada que use el renderer de canvas se puede testear —
+`getContext()` devuelve `null` y muere en `clearRect`. Por eso el error de `classList` de
+`preferCanvas` no se reproduce headless aunque su mecanismo esté entendido. Estos tests cubren
+el cableado, no el render.
 
 ## Pendientes conocidos
 
-- **La única pantalla real es `/login`.** `_authenticated/zonas.tsx` es un placeholder que
-  existe para ejercitar el guard por permiso y el filtrado de la navbar; el CRUD de zonas
-  todavía no está construido, así que `<Can>` no tiene más consumidor que ese botón.
+- **`/zonas` es la única pantalla de dominio.** Alta, edición y baja con mapa, más la capa
+  opcional de ubicaciones. No hay pantalla de ubicaciones: la API es sólo lista.
+- **Las ubicaciones no se paginan ni se filtran del lado del servidor**, así que la capa baja
+  las 1785 filas del seed y descarta en el cliente las que no tienen coordenadas — mostrando
+  cuántas fueron, que es lo que evita que sea un descarte silencioso. Cuando el backend gane
+  `UbicacionesFilters`, el filtro se va para allá.
+- **`react-hooks/incompatible-library` avisa sobre `useReactTable`** en `DataTable`: el React
+  Compiler no puede memoizar lo que devuelve TanStack Table. Es un warning inherente a la
+  librería, no algo por arreglar.
 - **No hay alias `@/`.** Ni en `tsconfig.app.json` (`paths`) ni en `vite.config.ts`
   (`resolve.alias`), así que los imports entre carpetas son relativos.
 - **No hay `ColorSchemeScript`.** `MantineProvider` va con `defaultColorScheme="auto"`, y

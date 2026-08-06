@@ -1,0 +1,13 @@
+/* Un MapContainer sin altura explícita mide 0px y el mapa no aparece, sin error. */
+.contenedor {
+    height: 60vh;
+    min-height: 320px;
+    width: 100%;
+    border-radius: var(--mantine-radius-sm);
+}
+
+@media (max-width: $mantine-breakpoint-sm) {
+    .contenedor {
+        height: 50vh;
+    }
+}

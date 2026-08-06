@@ -18,6 +18,10 @@ class UbicacionService:
         pass
 
     @staticmethod
+    def list_ubicaciones() -> list[Ubicacion]:
+        return list(Ubicacion.objects.order_by("nombre"))
+
+    @staticmethod
     def get_ubicacion_by_codigo(codigo: str) -> Ubicacion | None:
         return Ubicacion.objects.filter(codigo=codigo).first()
 

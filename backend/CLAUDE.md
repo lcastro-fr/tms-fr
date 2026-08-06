@@ -63,7 +63,7 @@ saberlo antes de buscarlo en `logistica/`.
 
 ## La API hoy
 
-Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **diez operaciones**:
+Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **doce operaciones**:
 
 | Método | Path | Auth | Entrada | Salida |
 |---|---|---|---|---|
@@ -77,15 +77,22 @@ Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **diez opera
 | POST | `/api/v1/zonas/` | `zonas.crear` | `ZonaIn` | 201 `ZonaOut` |
 | GET | `/api/v1/zonas/{id}` | `zonas.ver` | — | 200 `ZonaOut` |
 | PUT | `/api/v1/zonas/{id}` | `zonas.editar` | `ZonaIn` | 200 `ZonaOut` |
+| DELETE | `/api/v1/zonas/{id}` | `zonas.eliminar` | — | 204 |
+| GET | `/api/v1/ubicaciones/` | `ubicaciones.ver` | — | 200 `list[UbicacionOut]` |
 
-Todas declaran `**ERRORS` (400/401/403/404/409/422/500 → `ErrorOut`). **Zonas ya no acepta
-`X-API-Key`**: es browser-only. La `X-API-Key` quedó exclusivamente para la ingesta y el
-costo de OS, que son máquina-a-máquina. No hay DELETE, no hay `/health`, no hay paginación
-y **no hay ningún DTO `...Filters` todavía**: `GET /zonas/` devuelve el array completo sin
+Todas declaran `**ERRORS` (400/401/403/404/409/422/500 → `ErrorOut`). **Zonas y ubicaciones no
+aceptan `X-API-Key`**: son browser-only. La `X-API-Key` quedó exclusivamente para la ingesta y
+el costo de OS, que son máquina-a-máquina. No hay `/health`, no hay paginación y **no hay
+ningún DTO `...Filters` todavía**: los dos GET de lista devuelven el array completo sin
 envelope.
 
-La barra final de `/zonas/` es obligatoria: con `APPEND_SLASH` un GET sin barra redirige
-301 y un POST sin barra falla.
+La barra final de `/zonas/` y `/ubicaciones/` es obligatoria: con `APPEND_SLASH` un GET sin
+barra redirige 301 y un POST sin barra falla. Los paths con id **no la llevan**.
+
+`DELETE /zonas/{id}` es borrado lógico. **`TarifaFlete.zona` es `PROTECT`**, así que una zona
+con tarifas activas responde 409 `conflict` con `detail.tarifas_flete`: sin ese catch del
+`ProtectedError` en `ZonaService.delete_zona` la operación termina en 500, porque un
+`ProtectedError` no es un `DomainError`.
 
 Docs en `/api/v1/docs`; el schema en `/api/v1/openapi.json` se importa directo en Postman
 y es la fuente de los tipos del frontend.
@@ -147,6 +154,11 @@ mismo request. Por eso `/auth/login` devuelve el nuevo en su respuesta.
 catálogo. Vive en `shared/` y no en `users/` porque ponerlo allá obligaría a `catalog` a
 importar `users`. `sync_permisos` materializa una fila por miembro y da de baja lógica las
 que ya no están en el enum.
+
+**Agregar un código al enum pide migración además de `sync_permisos`.** `Permiso.codigo` es un
+`CharField(choices=PERMISO_CHOICES)` y Django serializa los `choices` en el estado de la
+migración, así que `makemigrations --check` falla sin un `AlterField`. La migración no crea
+ninguna fila: eso lo sigue haciendo `sync_permisos`.
 
 Las tablas de relación son **propias, no las automáticas de Django**: `UsuarioRol` y
 `RolPermiso` heredan de `BaseModel`. La intermedia que genera Django no tiene columna
@@ -229,8 +241,12 @@ Almacenamiento en UTC (`TIME_ZONE = "UTC"`, `USE_TZ = True`); la conversión a
 PostGIS de verdad, no dos floats. `Ubicacion.coordinates` es un `PointField(srid=4326)`
 con `@property latitud`/`longitud` (`.y`/`.x`), y `Zona.geom` un `PolygonField(srid=4326)`.
 
-El DTO `GeoJSONPolygon` usa orden GeoJSON, o sea **`[lng, lat]`**, no al revés. Un SRID
-distinto de 4326 se rechaza con `BusinessRuleError`.
+Los DTOs `GeoJSONPolygon` y `GeoJSONPoint` usan orden GeoJSON, o sea **`[lng, lat]`**, no al
+revés. Un SRID distinto de 4326 se rechaza con `BusinessRuleError`.
+
+`Zona.geom` es `PolygonField`, **no MultiPolygon**: una zona es exactamente un polígono, con
+sus anillos interiores si hace falta. Un anillo abierto no se cierra solo — muere en GEOS
+como 422 `business_rule`, así que el cliente manda el primer punto repetido al final.
 
 ## Convenciones de código
 
@@ -314,11 +330,11 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
 
 ## Pendientes conocidos
 
-- **Los únicos tests son los de auth/RBAC** (`conftest.py` + `users/tests/`): resolver,
-  cascada del borrado lógico, endpoints, CSRF y 403-vs-401. `shared/models.py` sigue siendo
-  el código más delicado del repo y sigue sin cobertura propia. Los tests van en un
-  directorio `tests/`, no en un `test_*.py` suelto: el per-file-ignore de `S101` es
-  `*/tests/*`.
+- **Los tests son los de auth/RBAC (`conftest.py` + `users/tests/`) y los de catalog**
+  (`catalog/tests/`: contratos de zonas y ubicaciones, el `ProtectedError` → 409, el orden
+  `[lng, lat]`, 403-vs-401). `shared/models.py` sigue siendo el código más delicado del repo y
+  sigue sin cobertura propia. Los tests van en un directorio `tests/`, no en un `test_*.py`
+  suelto: el per-file-ignore de `S101` es `*/tests/*`.
 - **El management command de la ingesta programada no existe.**
   `tracking/management/commands/` tiene sólo `__init__.py`, así que hoy la única forma de
   disparar la ingesta es el POST. Es el paso 1 sin terminar.
@@ -327,11 +343,15 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
   rechazar remitos válidos. Confirmar el alcance real con SAP.
 - `OrdenServicio` sólo tiene dos FKs y algunos flags: sin número, sin estado, sin fechas
   planificadas. El paso 3 necesita al menos estado y fechas.
-- **No hay API de lectura** de tickets, órdenes de servicio, remitos, ubicaciones ni
-  transportistas — sólo el admin. Sin eso el frontend no puede mostrar nada más que zonas.
+- **No hay API de lectura** de tickets, órdenes de servicio, remitos ni transportistas — sólo
+  el admin. Ubicaciones ya tiene la suya, pero es sólo lectura de lista: no hay CRUD.
 - **Sin paginación ni filtros.** `GET /zonas/` devuelve todas las zonas activas con su
-  polígono completo en una respuesta. Cuando haya volumen, hace falta paginar y los DTOs
-  `...Filters` que la convención ya nombra.
+  polígono completo, y `GET /ubicaciones/` **las 1785 filas del seed** en una sola respuesta
+  (~350 KB). Es el primer candidato real a paginar, y a los DTOs `...Filters` que la
+  convención ya nombra — un `con_coordenadas` sería el filtro obvio, porque el mapa sólo
+  dibuja las geolocalizadas.
+- **`UbicacionOut` expone un subconjunto** de la fila (lo que el mapa necesita más la
+  dirección). Agregar campos es aditivo y no rompe al frontend.
 - **`ALLOWED_HOSTS` tiene default vacío.** Con `DEBUG=False` y la variable sin setear,
   Django rechaza todo.
 - **No hay `STATIC_ROOT` ni `collectstatic`.** Los estáticos del admin se sirven sólo con
