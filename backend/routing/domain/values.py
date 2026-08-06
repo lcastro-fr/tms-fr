@@ -33,9 +33,9 @@ class Coordinate(BaseModel):
 
 class GeocodeQuery(BaseModel):
     model_config = ConfigDict(frozen=True)
-    direccion: str
-    localidad: str
-    provincia: str
+    direccion: str | None = None
+    localidad: str | None = None
+    provincia: str | None = None
     pais: str
 
     @field_validator("pais", mode="after")
@@ -51,4 +51,4 @@ class GeocodeQuery(BaseModel):
 
     def as_text(self) -> str:
         parts = [self.direccion, self.localidad, self.provincia, self.pais]
-        return ", ".join(p for p in parts)
+        return ", ".join(p for p in parts if p)

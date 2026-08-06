@@ -24,7 +24,7 @@ Entre apps: `tracking → logistica → transportista`, y todos → `catalog`. N
 
 | App | Modelos | API | Notas |
 |---|---|---|---|
-| `catalog` | `Ubicacion`, `Zona` | zonas (CRUD) | Datos maestros y geo. Todos dependen de acá. |
+| `catalog` | `Pais`, `Ubicacion`, `Zona` | zonas (CRUD) | Datos maestros y geo. Todos dependen de acá. |
 | `transportista` | `Transportista`, `Tarifario`, `TarifaFlete`, `ConceptoAdicional`, `TarifaConceptoAdicional` | — | Tarifarios con vigencia. Sin `use_cases/`. |
 | `logistica` | `OrdenServicio`, `CostoOrdenServicio` | — | Sin `use_cases/`: el de costo vive en `tracking`. |
 | `tracking` | `Ticket`, `Remito`, `RemitoDestino` | ingesta, costo de OS | La punta de entrada. |
@@ -319,6 +319,44 @@ no puede pisar con `NULL` la coordenada que alguien corrigió a mano: dejaría l
 el peor estado posible, y el que hace fallar el costeo por zona. `nombre` y `tipo` sí se
 refrescan desde la planilla, así que una recarga revierte esas dos ediciones.
 
+### El país es una FK, no un texto
+
+`Ubicacion.pais` es FK a `Pais`, cuya **PK es el código ISO 3166-1 alpha-2** — el mismo que
+manda SAP. Eso hace que "¿está en Argentina?" sea `ubicacion.pais_id == PAIS_LOCAL`, sin join
+y sin comparar strings libres. `PaisService.resolve` busca por código y cae al nombre, porque
+`Ubicacion.pais` traía el nombre y SAP manda el código.
+
+**La FK es nullable a propósito.** Un código que SAP mande y que no esté en la tabla deja la
+ubicación sin país, y eso viaja en `TicketIngestOut.destinos_sin_pais` en vez de caerse o de
+asumir Argentina. Un país inventado no es lo mismo que Argentina: `resolve_destinos` revienta
+con 422 `motivo="sin_pais"` recién cuando alguien intenta costear esa OS, en vez de mandarla
+al puerto por accidente.
+
+`catalog/paises.py` es la fuente de la tabla y **está incompleto a propósito**: la data
+migration siembra lo que haya y `manage.py sync_paises` lo vuelve a materializar, así que
+completar la lista no pide migración.
+
+### El destino por defecto de una vía
+
+Un destino fuera de Argentina no se factura hasta la puerta sino hasta el punto de salida del
+país, que sale de `OrdenServicio.via`. Qué ubicación es ese punto **no está en el código**:
+`Ubicacion.destino_default` la marca, con una unique parcial (`uq_ubicacion_destino_default`)
+que garantiza una sola activa por clave. Cambiar el puerto es editar una fila del admin, no
+deployar.
+
+`logistica/enums.py` mapea `Via → DestinoDefault`, y vive en `logistica` y no en `shared/`
+porque necesita importar `transportista` y `catalog` a la vez — lo mismo que hace a
+`PermisoCodigo` legal en `shared/` lo hace ilegal acá. **`Via.TERRESTRE` no está en el mapeo a
+propósito**: todavía no se definió a dónde sale un destino extranjero por tierra, y su
+ausencia es la rama de error (422 `motivo="via_sin_destino_default"`).
+
+`OrdenServicioService.resolve_destinos(orden, destinos)` recibe los destinos crudos en vez de
+buscarlos: `Remito` vive en `tracking` y la dirección es `tracking → logistica`, nunca al
+revés. El use case compone `RemitoService.get_distinct_destinos` con él. Se calcula **en
+caliente, sin cache**: cambiar la vía cambia el destino en el siguiente cálculo. Y deduplica,
+así que tres destinos extranjeros colapsan en un solo punto de salida — eso mueve la modalidad
+de multiparada a directo, y `cantidad_destinos` cuenta los resueltos, que es lo que se tarifó.
+
 `Zona.geom` es `PolygonField`, **no MultiPolygon**: una zona es exactamente un polígono, con
 sus anillos interiores si hace falta. Un anillo abierto no se cierra solo — muere en GEOS
 como 422 `business_rule`, así que el cliente manda el primer punto repetido al final.
@@ -405,9 +443,13 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
 
 ## Pendientes conocidos
 
-- **Los tests son los de auth/RBAC (`conftest.py` + `users/tests/`), los de catalog y los de
-  la geolocalización de la ingesta** (`tracking/tests/`, con un `Geocoder` falso inyectado para
-  no tocar la red — es para eso que el use case recibe el geocoder por constructor).
+- **`catalog/paises.py` tiene una sola entrada.** La tabla `Pais` arranca con Argentina y nada
+  más; hasta que se complete la lista, cualquier destino extranjero de SAP cae en
+  `destinos_sin_pais` y su OS no se puede costear.
+- **Los tests son los de auth/RBAC (`conftest.py` + `users/tests/`), los de catalog, los de
+  `logistica/tests/` (resolución de destinos por vía y costeo) y los de la geolocalización de
+  la ingesta** (`tracking/tests/`, con un `Geocoder` falso inyectado para no tocar la red — es
+  para eso que el use case recibe el geocoder por constructor).
   `shared/models.py` sigue siendo el código más delicado del repo y sigue sin cobertura propia.
   Los tests van en un directorio `tests/`, no en un `test_*.py` suelto: el per-file-ignore de
   `S101` es `*/tests/*`.

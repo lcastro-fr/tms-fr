@@ -168,10 +168,11 @@ Los de cada capa están en su documento. Estos cruzan las dos:
   tiene menos que eso, `pnpm dev/build/test` sólo corren adentro del contenedor.
 - **No hay `.env.example`**, aunque el arranque lo asumía (`cp .env.example .env`).
 - **La cobertura es parcial y desigual.** El backend tiene auth/RBAC (`users/tests/`), los
-  contratos de catalog (`catalog/tests/`) y la geolocalización de la ingesta
+  contratos de catalog (`catalog/tests/`), la resolución de destinos y el costeo de OS
+  (`logistica/tests/`) y la geolocalización de la ingesta
   (`tracking/tests/`); el frontend tiene las conversiones geo y el cableado de los dos mapas.
   Sin cobertura: `shared/models.py` —el borrado lógico, el código más delicado del repo—,
-  `transportista/` completo, el costeo de OS, y **no hay MSW**, así que en el frontend no se
+  `transportista/` completo, y **no hay MSW**, así que en el frontend no se
   pueden testear estados de carga ni error del camino real de datos.
 - **No hay historia de producción.** El `Dockerfile` del frontend es single-stage de dev
   (`CMD pnpm dev`) y el backend no tiene `STATIC_ROOT` ni `collectstatic`. Todo el setup

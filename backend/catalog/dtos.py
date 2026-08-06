@@ -69,12 +69,14 @@ class UbicacionOut(BaseModel):
     tipo: str
     nombre: str
     codigo: str | None
-    calle: str
-    localidad: str
-    provincia: str
-    pais: str
+    calle: str | None = None
+    localidad: str | None = None
+    provincia: str | None = None
+    pais: str | None = None
+    pais_codigo: str | None = None
     coordinates: GeoJSONPoint | None
     validada: bool
+    destino_default: str | None = None
 
     @classmethod
     def from_model(cls, ubicacion: Ubicacion) -> UbicacionOut:
@@ -87,7 +89,9 @@ class UbicacionOut(BaseModel):
             calle=ubicacion.calle,
             localidad=ubicacion.localidad,
             provincia=ubicacion.provincia,
-            pais=ubicacion.pais,
+            pais=ubicacion.pais.nombre if ubicacion.pais else None,
+            pais_codigo=ubicacion.pais_id,
             coordinates=GeoJSONPoint(coordinates=[punto.x, punto.y]) if punto else None,
             validada=ubicacion.validada,
+            destino_default=ubicacion.destino_default,
         )

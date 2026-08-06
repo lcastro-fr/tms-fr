@@ -7,7 +7,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from catalog.services import UbicacionService
+from catalog.enums import PAIS_LOCAL
+from catalog.services import PaisService, UbicacionService
 from shared.exceptions import DomainError
 from shared.xlsx import read_rows
 
@@ -47,6 +48,8 @@ class Command(BaseCommand):
         creados = actualizados = 0
         errores: list[str] = []
         fuera_bbox: list[str] = []
+        sin_pais: list[str] = []
+        paises: dict[str, Any] = {}
 
         try:
             with transaction.atomic():
@@ -69,6 +72,13 @@ class Command(BaseCommand):
                     if provincia == "0":
                         provincia = ""
 
+                    crudo = row.get("country") or PAIS_LOCAL
+                    if crudo not in paises:
+                        paises[crudo] = PaisService.resolve(crudo)
+                    pais = paises[crudo]
+                    if pais is None:
+                        sin_pais.append(f"{codigo} ({crudo})")
+
                     try:
                         # Savepoint propio: sin esto, un DomainError dejaría la
                         # transacción externa envenenada y no se podría seguir.
@@ -80,7 +90,7 @@ class Command(BaseCommand):
                                 calle=row.get("street") or "",
                                 localidad=row.get("locality") or "",
                                 provincia=provincia,
-                                pais=row.get("country") or "Argentina",
+                                pais=pais,
                                 lat=lat,
                                 lng=lng,
                             )
@@ -98,7 +108,9 @@ class Command(BaseCommand):
         except _DryRun:
             pass
 
-        self._report(path, len(rows), creados, actualizados, errores, fuera_bbox, options)
+        self._report(
+            path, len(rows), creados, actualizados, errores, fuera_bbox, sin_pais, options
+        )
 
     @staticmethod
     def _parse_coords(row: dict[str, str]) -> tuple[float | None, float | None, str | None]:
@@ -122,6 +134,7 @@ class Command(BaseCommand):
         actualizados: int,
         errores: list[str],
         fuera_bbox: list[str],
+        sin_pais: list[str],
         options: dict[str, Any],
     ) -> None:
         self.stdout.write(f"{path.name}: {leidas} filas leídas")
@@ -137,6 +150,13 @@ class Command(BaseCommand):
                 self.style.WARNING(f"  fuera de Argentina: {len(fuera_bbox)} (se importan igual)")
             )
             for linea in fuera_bbox[:10]:
+                self.stdout.write(f"    {linea}")
+
+        if sin_pais:
+            self.stdout.write(
+                self.style.WARNING(f"  sin país resuelto : {len(sin_pais)} (se importan sin país)")
+            )
+            for linea in sin_pais[:10]:
                 self.stdout.write(f"    {linea}")
 
         if errores:

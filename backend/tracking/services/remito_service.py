@@ -52,5 +52,7 @@ class RemitoService:
                 remitos_destino__active=True,
                 remitos_destino__remito__active=True,
                 remitos_destino__remito__orden_servicio_id=orden_servicio_id,
-            ).distinct()
+            )
+            .distinct()
+            .order_by("id")
         )

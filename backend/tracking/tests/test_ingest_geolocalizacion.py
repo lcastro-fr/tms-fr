@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from django.contrib.gis.geos import Point
 
-from catalog.enums import SRID_WGS84
+from catalog.enums import PAIS_LOCAL, SRID_WGS84
 from catalog.models import Ubicacion
 from routing.domain.exceptions import RoutingError
 from routing.domain.ports import Geocoder
@@ -88,17 +88,28 @@ def test_el_pais_se_guarda_canonico(planta, pais):
         payload(pais=pais)
     )
 
-    assert Ubicacion.objects.get(codigo="CL999").pais == "Argentina"
+    assert Ubicacion.objects.get(codigo="CL999").pais_id == PAIS_LOCAL
 
 
-@pytest.mark.parametrize("pais", ["Brasil", "", "XX"])
+@pytest.mark.parametrize("pais", ["Narnia", "", "Q1"])
 def test_un_pais_no_soportado_no_voltea_la_ingesta(planta, pais):
     salida = IngestTicketUseCase(
         GeocoderFalso(Coordinate.from_lnglat(-58.3816, -34.6037))
     ).execute(payload(pais=pais))
 
     assert salida.remitos_creados == ["0001-00000001"]
-    assert Ubicacion.objects.get(codigo="CL999").pais == pais.strip()
+    assert Ubicacion.objects.get(codigo="CL999").pais_id is None
+
+
+@pytest.mark.parametrize("pais", ["Narnia", "", "Q1"])
+def test_los_destinos_sin_pais_viajan_en_la_salida(planta, pais):
+    salida = IngestTicketUseCase(
+        GeocoderFalso(Coordinate.from_lnglat(-58.3816, -34.6037))
+    ).execute(payload(pais=pais))
+
+    assert [d.codigo for d in salida.destinos_sin_pais] == ["CL999"]
+    assert salida.destinos_sin_pais[0].pais_recibido == pais.strip()
+    assert salida.completo is False
 
 
 def test_el_adapter_rechaza_un_pais_que_no_soporta():

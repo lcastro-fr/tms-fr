@@ -14,10 +14,10 @@ if TYPE_CHECKING:
 class RemitoUbicacionIn(BaseModel):
     codigo: str
     nombre: str
-    direccion: str
-    localidad: str
-    provincia: str
     pais: str
+    direccion: str | None = None
+    localidad: str | None = None
+    provincia: str | None = None
 
 
 class TicketIngestRemitoIn(BaseModel):
@@ -46,6 +46,12 @@ class DestinoSinGeolocalizarOut(BaseModel):
     motivo: str
 
 
+class DestinoSinPaisOut(BaseModel):
+    codigo: str
+    nombre: str
+    pais_recibido: str
+
+
 class TicketIngestOut(BaseModel):
     ticket_id: int
     numero: str
@@ -53,10 +59,13 @@ class TicketIngestOut(BaseModel):
     remitos_creados: list[str]
     remitos_omitidos: list[RemitoOmitidoOut]
     destinos_sin_geolocalizar: list[DestinoSinGeolocalizarOut]
+    destinos_sin_pais: list[DestinoSinPaisOut]
 
     @property
     def completo(self) -> bool:
-        return not self.remitos_omitidos and not self.destinos_sin_geolocalizar
+        return not (
+            self.remitos_omitidos or self.destinos_sin_geolocalizar or self.destinos_sin_pais
+        )
 
     @classmethod
     def from_model(
@@ -65,6 +74,7 @@ class TicketIngestOut(BaseModel):
         remitos_creados: list[str],
         remitos_omitidos: list[RemitoOmitidoOut],
         destinos_sin_geolocalizar: list[DestinoSinGeolocalizarOut],
+        destinos_sin_pais: list[DestinoSinPaisOut],
     ) -> TicketIngestOut:
         return cls(
             ticket_id=ticket.id,
@@ -73,4 +83,5 @@ class TicketIngestOut(BaseModel):
             remitos_creados=remitos_creados,
             remitos_omitidos=remitos_omitidos,
             destinos_sin_geolocalizar=destinos_sin_geolocalizar,
+            destinos_sin_pais=destinos_sin_pais,
         )

@@ -5,13 +5,14 @@ import logging
 from django.db import transaction
 
 from catalog.enums import TipoUbicacion
-from catalog.services import UbicacionService
+from catalog.services import PaisService, UbicacionService
 from logistica.services import OrdenServicioService
 from routing.domain.exceptions import RoutingError
 from routing.domain.ports import Geocoder
-from routing.domain.values import GeocodeQuery, normalizar_pais
+from routing.domain.values import GeocodeQuery
 from tracking.dtos import (
     DestinoSinGeolocalizarOut,
+    DestinoSinPaisOut,
     RemitoOmitidoOut,
     RemitoUbicacionIn,
     TicketIngestIn,
@@ -44,6 +45,7 @@ class IngestTicketUseCase:
         creados: list[str] = []
         omitidos: list[RemitoOmitidoOut] = []
         sin_geolocalizar: list[DestinoSinGeolocalizarOut] = []
+        sin_pais: list[DestinoSinPaisOut] = []
 
         for remito in data.remitos:
             destinos_map: dict[str, RemitoUbicacionIn] = {u.codigo: u for u in remito.destinos}
@@ -68,6 +70,16 @@ class IngestTicketUseCase:
                         )
                     )
 
+                pais = PaisService.resolve(geocode_query.pais)
+                if pais is None:
+                    sin_pais.append(
+                        DestinoSinPaisOut(
+                            codigo=destino.codigo,
+                            nombre=destino.nombre,
+                            pais_recibido=geocode_query.pais,
+                        )
+                    )
+
                 lng, lat = coordinates.to_lnglat() if coordinates else (None, None)
 
                 # Geocode query tiene algunos cleans de datos
@@ -78,7 +90,7 @@ class IngestTicketUseCase:
                     calle=geocode_query.direccion,
                     localidad=geocode_query.localidad,
                     provincia=geocode_query.provincia,
-                    pais=normalizar_pais(geocode_query.pais) or geocode_query.pais,
+                    pais=pais,
                     lat=lat,
                     lng=lng,
                     validada=False,
@@ -107,4 +119,4 @@ class IngestTicketUseCase:
             fecha_egreso=data.fecha_egreso,
         )
 
-        return TicketIngestOut.from_model(ticket, creados, omitidos, sin_geolocalizar)
+        return TicketIngestOut.from_model(ticket, creados, omitidos, sin_geolocalizar, sin_pais)

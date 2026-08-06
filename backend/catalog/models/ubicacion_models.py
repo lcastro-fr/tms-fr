@@ -1,6 +1,7 @@
 from django.contrib.gis.db import models
 
-from catalog.enums import TIPO_UBICACION_CHOICES, TipoUbicacion
+from catalog.enums import DESTINO_DEFAULT_CHOICES, TIPO_UBICACION_CHOICES, TipoUbicacion
+from catalog.models.pais_models import Pais
 from shared.models import BaseModel
 
 
@@ -16,9 +17,14 @@ class Ubicacion(BaseModel):
     calle = models.CharField(max_length=200)
     localidad = models.CharField(max_length=120)
     provincia = models.CharField(max_length=120)
-    pais = models.CharField(max_length=120, default="Argentina")
+    pais = models.ForeignKey(
+        Pais, on_delete=models.PROTECT, related_name="ubicaciones", null=True, blank=True
+    )
     coordinates = models.PointField(srid=4326, blank=True, null=True, spatial_index=True)
     validada = models.BooleanField(default=True)
+    destino_default = models.CharField(  # noqa: DJ001
+        max_length=30, choices=DESTINO_DEFAULT_CHOICES, null=True, blank=True
+    )
 
     @property
     def latitud(self) -> float | None:
@@ -41,7 +47,12 @@ class Ubicacion(BaseModel):
                 fields=["codigo"],
                 name="uq_ubicacion_codigo",
                 condition=models.Q(codigo__isnull=False, active=True),
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["destino_default"],
+                name="uq_ubicacion_destino_default",
+                condition=models.Q(destino_default__isnull=False, active=True),
+            ),
         ]
         indexes = [
             models.Index(

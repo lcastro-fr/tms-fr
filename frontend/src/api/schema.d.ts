@@ -245,6 +245,15 @@ export interface components {
             /** Motivo */
             motivo: string;
         };
+        /** DestinoSinPaisOut */
+        DestinoSinPaisOut: {
+            /** Codigo */
+            codigo: string;
+            /** Nombre */
+            nombre: string;
+            /** Pais Recibido */
+            pais_recibido: string;
+        };
         /** RemitoOmitidoOut */
         RemitoOmitidoOut: {
             /** Numero */
@@ -266,6 +275,8 @@ export interface components {
             remitos_omitidos: components["schemas"]["RemitoOmitidoOut"][];
             /** Destinos Sin Geolocalizar */
             destinos_sin_geolocalizar: components["schemas"]["DestinoSinGeolocalizarOut"][];
+            /** Destinos Sin Pais */
+            destinos_sin_pais: components["schemas"]["DestinoSinPaisOut"][];
         };
         /** RemitoUbicacionIn */
         RemitoUbicacionIn: {
@@ -273,14 +284,14 @@ export interface components {
             codigo: string;
             /** Nombre */
             nombre: string;
-            /** Direccion */
-            direccion: string;
-            /** Localidad */
-            localidad: string;
-            /** Provincia */
-            provincia: string;
             /** Pais */
             pais: string;
+            /** Direccion */
+            direccion?: string | null;
+            /** Localidad */
+            localidad?: string | null;
+            /** Provincia */
+            provincia?: string | null;
         };
         /** TicketIngestIn */
         TicketIngestIn: {
@@ -410,16 +421,20 @@ export interface components {
             /** Codigo */
             codigo: string | null;
             /** Calle */
-            calle: string;
+            calle?: string | null;
             /** Localidad */
-            localidad: string;
+            localidad?: string | null;
             /** Provincia */
-            provincia: string;
+            provincia?: string | null;
             /** Pais */
-            pais: string;
+            pais?: string | null;
+            /** Pais Codigo */
+            pais_codigo?: string | null;
             coordinates: components["schemas"]["GeoJSONPoint"] | null;
             /** Validada */
             validada: boolean;
+            /** Destino Default */
+            destino_default?: string | null;
         };
         /**
          * TipoUbicacion

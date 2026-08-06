@@ -5,8 +5,8 @@ from typing import Any
 from django.contrib.gis.geos import Point
 from django.db import transaction
 
-from catalog.enums import SRID_WGS84, TipoUbicacion
-from catalog.models import Ubicacion
+from catalog.enums import SRID_WGS84, DestinoDefault, TipoUbicacion
+from catalog.models import Pais, Ubicacion
 from shared.exceptions import BusinessRuleError, NotFoundError
 
 
@@ -20,11 +20,14 @@ class UbicacionService:
     class TipoInvalidoError(BusinessRuleError):
         pass
 
+    class DestinoDefaultNotFoundError(NotFoundError):
+        pass
+
     @staticmethod
     def list_ubicaciones(
         validada: bool | None = None, con_coordenadas: bool | None = None
     ) -> list[Ubicacion]:
-        qs = Ubicacion.objects.all()
+        qs = Ubicacion.objects.select_related("pais")
         if validada is not None:
             qs = qs.filter(validada=validada)
         if con_coordenadas is not None:
@@ -77,6 +80,20 @@ class UbicacionService:
         return ubicacion
 
     @staticmethod
+    def get_ubicacion_by_destino_default(clave: DestinoDefault) -> Ubicacion | None:
+        return Ubicacion.objects.filter(destino_default=clave.value).first()
+
+    @staticmethod
+    def get_ubicacion_by_destino_default_or_raise(clave: DestinoDefault) -> Ubicacion:
+        ubicacion = UbicacionService.get_ubicacion_by_destino_default(clave)
+        if ubicacion is None:
+            raise UbicacionService.DestinoDefaultNotFoundError(
+                f"Ninguna ubicación está marcada como destino por defecto {clave.value!r}",
+                detail={"destino_default": clave.value},
+            )
+        return ubicacion
+
+    @staticmethod
     def _build_coordinates(lat: float | None, lng: float | None) -> Point | None:
         if lat is None and lng is None:
             return None
@@ -111,7 +128,7 @@ class UbicacionService:
         calle: str,
         localidad: str,
         provincia: str,
-        pais: str = "Argentina",
+        pais: Pais | None = None,
         lat: float | None = None,
         lng: float | None = None,
         validada: bool = True,
@@ -126,10 +143,12 @@ class UbicacionService:
             "calle": calle,
             "localidad": localidad,
             "provincia": provincia,
-            "pais": pais,
         }
-        al_crear = {**campos, "coordinates": coordinates, "validada": validada}
+        al_crear = {**campos, "pais": pais, "coordinates": coordinates, "validada": validada}
 
+        # Igual que coordinates: una fuente que no trae el dato no pisa el que ya está.
+        if pais is not None:
+            campos["pais"] = pais
         if coordinates is not None:
             campos["coordinates"] = coordinates
 
