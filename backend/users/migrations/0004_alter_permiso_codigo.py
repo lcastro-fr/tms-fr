@@ -4,15 +4,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('users', '0003_alter_permiso_codigo'),
+        ("users", "0003_alter_permiso_codigo"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='permiso',
-            name='codigo',
-            field=models.CharField(choices=[('zonas.ver', 'zonas.ver'), ('zonas.crear', 'zonas.crear'), ('zonas.editar', 'zonas.editar'), ('zonas.eliminar', 'zonas.eliminar'), ('ubicaciones.ver', 'ubicaciones.ver'), ('ubicaciones.editar', 'ubicaciones.editar')], max_length=60),
+            model_name="permiso",
+            name="codigo",
+            field=models.CharField(
+                choices=[
+                    ("zonas.ver", "zonas.ver"),
+                    ("zonas.crear", "zonas.crear"),
+                    ("zonas.editar", "zonas.editar"),
+                    ("zonas.eliminar", "zonas.eliminar"),
+                    ("ubicaciones.ver", "ubicaciones.ver"),
+                    ("ubicaciones.editar", "ubicaciones.editar"),
+                ],
+                max_length=60,
+            ),
         ),
     ]

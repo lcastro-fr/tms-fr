@@ -22,6 +22,11 @@ type ItemDeNav = {
 const NAV: ItemDeNav[] = [
     { label: "Zonas", to: "/zonas", permiso: "zonas.ver" },
     { label: "Ubicaciones", to: "/ubicaciones", permiso: "ubicaciones.ver" },
+    {
+        label: "Órdenes de servicio",
+        to: "/ordenes-servicio",
+        permiso: "ordenes_servicio.ver",
+    },
 ];
 
 function AuthenticatedLayout() {

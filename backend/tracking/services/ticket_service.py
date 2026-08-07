@@ -39,23 +39,46 @@ class TicketService:
             )
 
     @staticmethod
+    def list_by_ordenes_servicio(orden_servicio_ids: list[int]) -> dict[int, list[Ticket]]:
+        """
+        Los tickets de varias OS en una query, agrupados por OS.
+        """
+        tickets = Ticket.objects.filter(
+            orden_servicio_id__in=orden_servicio_ids
+        ).select_related("planta")
+
+        agrupados: dict[int, list[Ticket]] = {}
+        for ticket in tickets:
+            agrupados.setdefault(ticket.orden_servicio_id, []).append(ticket)
+        return agrupados
+
+    @staticmethod
+    def dias_estadia(ticket: Ticket) -> int | None:
+        """
+        Días cobrables de un ticket. La estadía empieza cuando cambia el día, así que se
+        cuenta por fecha en TZ_OPERACION y no por horas. None mientras no haya egreso.
+        """
+        if ticket.fecha_egreso is None:
+            return None
+        tz = ZoneInfo(settings.TZ_OPERACION)
+        ingreso = ticket.fecha_ingreso.astimezone(tz).date()
+        egreso = ticket.fecha_egreso.astimezone(tz).date()
+        return (egreso - ingreso).days
+
+    @staticmethod
     def get_dias_permanencia(orden_servicio_id: int) -> int:
         """
-        Días cobrables de permanencia de los tickets de una orden de servicio. La estadia empieza cuando cambia el dia.
+        Días cobrables de permanencia de los tickets de una orden de servicio.
         """
-        tz = ZoneInfo(settings.TZ_OPERACION)
-        tickets = Ticket.objects.filter(orden_servicio_id=orden_servicio_id)
-
         dias = 0
-        for ticket in tickets:
-            if ticket.fecha_egreso is None:
+        for ticket in Ticket.objects.filter(orden_servicio_id=orden_servicio_id):
+            estadia = TicketService.dias_estadia(ticket)
+            if estadia is None:
                 raise TicketService.TicketSinEgresoError(
                     f"El ticket {ticket.numero} no tiene fecha_egreso, no se puede costear",
                     detail={"ticket": ticket.numero},
                 )
-            ingreso = ticket.fecha_ingreso.astimezone(tz).date()
-            egreso = ticket.fecha_egreso.astimezone(tz).date()
-            dias += (egreso - ingreso).days
+            dias += estadia
         return dias
 
     @staticmethod

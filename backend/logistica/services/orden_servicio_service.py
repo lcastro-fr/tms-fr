@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+from django.conf import settings
+from django.db import transaction
+from django.db.models import Q
 
 from catalog.enums import PAIS_LOCAL
 from catalog.models import Ubicacion
@@ -30,7 +35,7 @@ class OrdenServicioService:
         tipo_camion: str | None = None,
         hombreador: bool = False,
         via: str = Via.TERRESTRE.value,
-        facturable: bool = False
+        facturable: bool = False,
     ) -> OrdenServicio:
         return OrdenServicio.objects.create(
             origen_id=origen_id,
@@ -40,12 +45,55 @@ class OrdenServicioService:
             tipo_camion=tipo_camion,
             hombreador=hombreador,
             via=via,
-            facturable=facturable
+            facturable=facturable,
         )
 
     @staticmethod
+    def _inicio_del_dia(dia: date) -> datetime:
+        return datetime.combine(dia, time.min, tzinfo=ZoneInfo(settings.TZ_OPERACION))
+
+    @staticmethod
+    def list_ordenes_servicio(
+        facturable: bool | None = None,
+        con_costo: bool | None = None,
+        numero: str | None = None,
+        fecha_viaje_desde: date | None = None,
+        fecha_viaje_hasta: date | None = None,
+        incluir_sin_fecha: bool | None = None,
+    ) -> list[OrdenServicio]:
+        qs = OrdenServicio.objects.select_related("origen", "transportista")
+        if facturable is not None:
+            qs = qs.filter(facturable=facturable)
+        if con_costo is not None:
+            tiene_costo = Q(costos__active=True)
+            qs = qs.filter(tiene_costo) if con_costo else qs.exclude(tiene_costo)
+        if numero:
+            qs = qs.filter(
+                Q(tickets__numero__icontains=numero, tickets__active=True)
+                | Q(remitos__numero__icontains=numero, remitos__active=True)
+            ).distinct()
+        rango = Q()
+        if fecha_viaje_desde is not None:
+            rango &= Q(fecha_viaje__gte=OrdenServicioService._inicio_del_dia(fecha_viaje_desde))
+        if fecha_viaje_hasta is not None:
+            rango &= Q(
+                fecha_viaje__lt=OrdenServicioService._inicio_del_dia(
+                    fecha_viaje_hasta + timedelta(days=1)
+                )
+            )
+        if rango:
+            if incluir_sin_fecha:
+                rango |= Q(fecha_viaje__isnull=True)
+            qs = qs.filter(rango)
+        return list(qs.order_by("-fecha_viaje", "-id"))
+
+    @staticmethod
     def get_orden_servicio(orden_servicio_id: int) -> OrdenServicio | None:
-        return OrdenServicio.objects.filter(pk=orden_servicio_id).first()
+        return (
+            OrdenServicio.objects.select_related("origen", "transportista")
+            .filter(pk=orden_servicio_id)
+            .first()
+        )
 
     @staticmethod
     def get_orden_servicio_or_raise(orden_servicio_id: int) -> OrdenServicio:
@@ -54,6 +102,36 @@ class OrdenServicioService:
             raise OrdenServicioService.OrdenServicioNotFoundError(
                 f"No existe la orden de servicio {orden_servicio_id}",
                 detail={"orden_servicio_id": orden_servicio_id},
+            )
+        return orden_servicio
+
+    @staticmethod
+    def update_orden_servicio(
+        orden_servicio: OrdenServicio,
+        fecha_viaje: datetime | None,
+        tipo_operacion: str,
+        tipo_camion: str | None,
+        via: str,
+        hombreador: bool,
+        facturable: bool,
+    ) -> OrdenServicio:
+        orden_servicio.fecha_viaje = fecha_viaje
+        orden_servicio.tipo_operacion = tipo_operacion
+        orden_servicio.tipo_camion = tipo_camion
+        orden_servicio.via = via
+        orden_servicio.hombreador = hombreador
+        orden_servicio.facturable = facturable
+        with transaction.atomic():
+            orden_servicio.save(
+                update_fields=[
+                    "fecha_viaje",
+                    "tipo_operacion",
+                    "tipo_camion",
+                    "via",
+                    "hombreador",
+                    "facturable",
+                    "updated_at",
+                ]
             )
         return orden_servicio
 

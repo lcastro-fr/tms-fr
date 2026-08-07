@@ -3,10 +3,11 @@ from __future__ import annotations
 from django.http import HttpRequest
 from ninja import Router
 
-from core.auth import IngestApiKeyAuth
+from core.auth import IngestApiKeyAuth, SessionAuth
 from logistica.dtos import CostoOrdenServicioOut
 from routing.factory import build_geocoder
 from shared.dtos import ERRORS
+from shared.permisos import PermisoCodigo
 from tracking.dtos import TicketIngestIn, TicketIngestOut
 from tracking.use_cases import CalcularCostoOrdenServicioUseCase, IngestTicketUseCase
 
@@ -28,7 +29,7 @@ def ingest_ticket(request: HttpRequest, payload: TicketIngestIn):
 @ordenes_router.post(
     "/{int:orden_servicio_id}/costo",
     response={200: CostoOrdenServicioOut, **ERRORS},
-    auth=IngestApiKeyAuth(),
+    auth=SessionAuth(PermisoCodigo.ORDENES_SERVICIO_CALCULAR_COSTO),
     summary="Calcula y guarda el costo de una orden de servicio",
     description=(
         "Recalcula siempre: da de baja el costo vigente y crea uno nuevo con los "

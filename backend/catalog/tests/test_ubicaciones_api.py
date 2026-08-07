@@ -38,9 +38,7 @@ def editor(crear_usuario, crear_rol, asignar_rol):
     user = crear_usuario()
     asignar_rol(
         user,
-        crear_rol(
-            "edicion", PermisoCodigo.UBICACIONES_VER, PermisoCodigo.UBICACIONES_EDITAR
-        ),
+        crear_rol("edicion", PermisoCodigo.UBICACIONES_VER, PermisoCodigo.UBICACIONES_EDITAR),
     )
     return user
 
@@ -170,9 +168,7 @@ def test_una_latitud_fuera_de_rango_da_business_rule(client, editor, crear_ubica
     payload = ubicacion_in()
     payload["coordinates"]["coordinates"] = [-58.3816, 999.0]
 
-    resp = client.put(
-        f"{UBICACIONES}{ubicacion.id}", payload, content_type="application/json"
-    )
+    resp = client.put(f"{UBICACIONES}{ubicacion.id}", payload, content_type="application/json")
 
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "business_rule"
@@ -201,9 +197,7 @@ def test_actualizar_sin_permiso_da_403_y_no_401(client, lector, crear_ubicacion)
     )
 
     assert resp.status_code == 403
-    assert resp.json()["error"]["detail"]["requiere"] == [
-        PermisoCodigo.UBICACIONES_EDITAR.value
-    ]
+    assert resp.json()["error"]["detail"]["requiere"] == [PermisoCodigo.UBICACIONES_EDITAR.value]
 
 
 def test_actualizar_una_inexistente_da_404(client, editor):

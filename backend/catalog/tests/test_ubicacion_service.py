@@ -7,6 +7,7 @@ from catalog.services import UbicacionService
 
 pytestmark = pytest.mark.django_db
 
+
 def upsert(
     codigo: str,
     validada: bool,
@@ -56,8 +57,11 @@ def test_el_upsert_fija_validada_al_crear():
 def test_un_upsert_sin_coordenadas_no_borra_la_que_ya_estaba():
     upsert("CL100", validada=False)
     UbicacionService.update_ubicacion(
-        Ubicacion.objects.get(codigo="CL100"), nombre="Corregida", tipo="cliente",
-        lat=-34.6037, lng=-58.3816,
+        Ubicacion.objects.get(codigo="CL100"),
+        nombre="Corregida",
+        tipo="cliente",
+        lat=-34.6037,
+        lng=-58.3816,
     )
 
     upsert("CL100", validada=False, lat=None, lng=None)
@@ -74,6 +78,4 @@ def test_un_upsert_con_coordenadas_si_actualiza_la_anterior():
 
     ubicacion = Ubicacion.objects.get(codigo="CL100")
     assert ubicacion.coordinates is not None
-    assert (ubicacion.coordinates.x, ubicacion.coordinates.y) == pytest.approx(
-        (-58.3816, -34.6037)
-    )
+    assert (ubicacion.coordinates.x, ubicacion.coordinates.y) == pytest.approx((-58.3816, -34.6037))

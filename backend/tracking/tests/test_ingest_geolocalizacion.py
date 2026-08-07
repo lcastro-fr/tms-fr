@@ -77,9 +77,7 @@ def test_crea_la_ubicacion_faltante_con_la_coordenada_geolocalizada(planta):
     ubicacion = Ubicacion.objects.get(codigo="CL999")
     assert ubicacion.validada is False
     assert ubicacion.coordinates is not None
-    assert (ubicacion.coordinates.x, ubicacion.coordinates.y) == pytest.approx(
-        (-58.3816, -34.6037)
-    )
+    assert (ubicacion.coordinates.x, ubicacion.coordinates.y) == pytest.approx((-58.3816, -34.6037))
 
 
 @pytest.mark.parametrize("pais", ["Argentina", "AR", " ar "])
@@ -93,9 +91,9 @@ def test_el_pais_se_guarda_canonico(planta, pais):
 
 @pytest.mark.parametrize("pais", ["Narnia", "", "Q1"])
 def test_un_pais_no_soportado_no_voltea_la_ingesta(planta, pais):
-    salida = IngestTicketUseCase(
-        GeocoderFalso(Coordinate.from_lnglat(-58.3816, -34.6037))
-    ).execute(payload(pais=pais))
+    salida = IngestTicketUseCase(GeocoderFalso(Coordinate.from_lnglat(-58.3816, -34.6037))).execute(
+        payload(pais=pais)
+    )
 
     assert salida.remitos_creados == ["0001-00000001"]
     assert Ubicacion.objects.get(codigo="CL999").pais_id is None
@@ -103,9 +101,9 @@ def test_un_pais_no_soportado_no_voltea_la_ingesta(planta, pais):
 
 @pytest.mark.parametrize("pais", ["Narnia", "", "Q1"])
 def test_los_destinos_sin_pais_viajan_en_la_salida(planta, pais):
-    salida = IngestTicketUseCase(
-        GeocoderFalso(Coordinate.from_lnglat(-58.3816, -34.6037))
-    ).execute(payload(pais=pais))
+    salida = IngestTicketUseCase(GeocoderFalso(Coordinate.from_lnglat(-58.3816, -34.6037))).execute(
+        payload(pais=pais)
+    )
 
     assert [d.codigo for d in salida.destinos_sin_pais] == ["CL999"]
     assert salida.destinos_sin_pais[0].pais_recibido == pais.strip()

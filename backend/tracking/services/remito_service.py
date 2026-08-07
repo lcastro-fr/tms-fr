@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
 
 from catalog.models import Ubicacion
 from logistica.models import OrdenServicio
@@ -44,6 +45,25 @@ class RemitoService:
     @staticmethod
     def add_destino(remito: Remito, ubicacion: Ubicacion) -> RemitoDestino:
         return RemitoDestino.objects.create(remito=remito, ubicacion=ubicacion)
+
+    @staticmethod
+    def list_by_orden_servicio(orden_servicio_id: int) -> list[tuple[Remito, list[RemitoDestino]]]:
+        """
+        Los remitos de una OS con sus destinos ya resueltos, en dos queries.
+        """
+        remitos = (
+            Remito.objects.filter(orden_servicio_id=orden_servicio_id)
+            .prefetch_related(
+                Prefetch(
+                    "destinos",
+                    queryset=RemitoDestino.objects.filter(active=True)
+                    .select_related("ubicacion", "ubicacion__pais")
+                    .order_by("id"),
+                )
+            )
+            .order_by("numero")
+        )
+        return [(remito, list(remito.destinos.all())) for remito in remitos]
 
     @staticmethod
     def get_distinct_destinos(orden_servicio_id: int) -> list[Ubicacion]:

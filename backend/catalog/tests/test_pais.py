@@ -73,9 +73,7 @@ def test_puerto_y_aeropuerto_conviven():
         == "ARBUE"
     )
     assert (
-        UbicacionService.get_ubicacion_by_destino_default_or_raise(
-            DestinoDefault.AEROPUERTO
-        ).codigo
+        UbicacionService.get_ubicacion_by_destino_default_or_raise(DestinoDefault.AEROPUERTO).codigo
         == "AREZE"
     )
 

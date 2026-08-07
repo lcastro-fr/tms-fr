@@ -15,11 +15,12 @@ El frontend va detrás del backend, no delante. **Sólo se construyen pantallas 
 endpoints que existen.** Nada de inventar rutas ni mockear respuestas para adelantar UI:
 si falta el endpoint, el trabajo es en `../backend`.
 
-Hoy la API tiene trece operaciones: cuatro de auth, cinco del CRUD de zonas
-(`/api/v1/zonas/`), dos de ubicaciones (`/api/v1/ubicaciones/`, lista con filtro y PUT) y dos de
-máquina. Zonas y ubicaciones son las dos pantallas de dominio. Tickets y órdenes de servicio
-sólo tienen endpoints de escritura pensados para máquina (la ingesta desde SAP y el cálculo de
-costo); les falta API de lectura.
+Hoy la API tiene diecisiete operaciones: cuatro de auth, cinco del CRUD de zonas
+(`/api/v1/zonas/`), dos de ubicaciones (`/api/v1/ubicaciones/`, lista con filtro y PUT), cinco de
+órdenes de servicio (`/api/v1/ordenes-servicio/`: opciones, lista con filtros, detalle, PUT y el
+POST del costo) y una de máquina. Zonas, ubicaciones y órdenes de servicio son las tres pantallas
+de dominio. Tickets sigue teniendo sólo la ingesta desde SAP, que es máquina a máquina; le falta
+API de lectura.
 
 ## Arquitectura
 
@@ -34,7 +35,7 @@ src/
     tracking/        tickets, remitos
   routes/      file-based. Sólo composición.
   components/  UI compartida, sin conocimiento de dominio.
-  lib/         date.ts, money.ts, format.ts
+  lib/         date.ts, money.ts, geojson.ts
 ```
 
 Anatomía de un feature:
@@ -77,10 +78,17 @@ interno. `components/` y `lib/` no importan de `features/`.
   mano, ninguna regla de negocio, ninguna URL.
 - **El dinero es string.** El backend serializa `Decimal` como string JSON
   (`"185000.00"`) y así se guarda en el estado. `Number()` sólo dentro de `lib/money.ts`
-  y sólo para formatear. Nunca aritmética de pesos en float.
+  y sólo para formatear. Nunca aritmética de pesos en float. Ojo con el caso vacío:
+  **`Number("")` es `0`, no `NaN`**, así que sin un guard explícito un precio ausente se
+  muestra como `$ 0,00`, que es un precio real. Está cubierto en `money.test.ts`.
 - **Toda fecha que sale lleva offset explícito.** El backend exige `AwareDatetime`: un ISO
   naive es 422. La conversión a hora de Buenos Aires pasa sólo en el borde de
   presentación, en `lib/date.ts`.
+- **Los pickers de `@mantine/dates` entregan un reloj de pared naive**
+  (`"YYYY-MM-DD HH:mm:ss"`, `DateStringValue`), no un `Date` ni un ISO. Mandarlo tal cual es
+  un 422 garantizado. `aIsoConOffset()` lo interpreta en **`TZ_OPERACION`, no en la zona del
+  browser** — un usuario en otro huso escribiendo "10:00" quiere decir las 10 de Buenos Aires — y
+  `aWallClock()` es la vuelta, para alimentar el picker desde el ISO del backend.
 - **Se ramifica por `error.code`, no por status.** El 422 es dos cosas distintas.
 - **Nada de fallas silenciosas.** Espejo de la regla del backend: si una operación
   descarta datos (`TicketIngestOut.remitos_omitidos`), eso se le muestra al usuario. No
@@ -165,9 +173,26 @@ en `http.ts`: eso cerraría el ciclo `router → routes → features → api →
 
 ## Tablas
 
-- **TanStack Table es la lógica, Mantine es el markup.** Un `DataTable` genérico en
-  `components/` recibe `columns` + `data` y renderiza con `<Table>` de Mantine. Nada de
+- **TanStack Table es la lógica, Mantine es el markup.** Los componentes de tabla viven en
+  `components/`, reciben `columns` + `data` y renderizan con `<Table>` de Mantine. Nada de
   `<table>` a mano en un feature.
+- **Son dos componentes y no uno con props opcionales**, y es a propósito:
+  - `DataTable` — lista simple, con selección de filas (`rowSelection`). Lo usan zonas y
+    ubicaciones.
+  - `DataTableExpandible` — lista con un detalle por fila (`getExpandedRowModel`), sin
+    selección. Lo usa órdenes de servicio. Agrega él mismo la columna del chevron —es mecánica
+    de la tabla, no dominio— y el `colSpan` del panel sale de `getVisibleFlatColumns().length + 1`:
+    si no coincide con la cantidad de columnas, la tabla se desalinea sola. El contenido del
+    panel **se renderiza sólo con la fila abierta**; montar 20 sub-tablas cerradas por página es
+    trabajo tirado.
+
+  Un `DataTable` que hiciera las dos cosas terminaría con props que aplican a la mitad de sus
+  usos. La duplicación entre los dos (header, paginación, el `Box` con borde) es el precio, y es
+  más barato que la alternativa.
+- **No entró `mantine-datatable`.** Es compatible (pide `@mantine/core >=9`, tenemos 9.5) y su
+  `rowExpansion` hace exactamente esto, pero `getExpandedRowModel` ya viene en el
+  `@tanstack/react-table` instalado. La librería sumaba una dependencia más `clsx`, un
+  `docker compose build web`, y un `DataTable` que colisiona de nombre con el nuestro.
 - Las **column defs viven en el feature**: qué columna, qué label y cómo se formatea un
   precio es conocimiento de dominio.
 - El formateo pasa en la `cell`, usando `lib/money.ts` y `lib/date.ts`. Una columna de
@@ -175,7 +200,8 @@ en `http.ts`: eso cerraría el ciclo `router → routes → features → api →
 - **Hoy todo es client-side** (`getSortedRowModel`, `getFilteredRowModel`,
   `getPaginationRowModel`). Es correcto: la API no tiene paginación ni filtros y
   `list[ZonaOut]` es el array completo.
-- **Ubicaciones ya hizo esa migración a medias, y es el molde.** Sus dos filtros son
+- **Ubicaciones ya hizo esa migración a medias, y es el molde** (órdenes de servicio lo copia
+  entero: `validateSearch`, `loaderDeps`, `useRouterState` para el estado visual). Sus dos filtros son
   server-side (`UbicacionesFilters`), y el estado vive en los **search params de la ruta**:
   `validateSearch` los tipa, `loaderDeps` hace que el loader se rehaga al cambiarlos, y el mismo
   objeto es la entrada de `ubicacionesQueryOptions(filters)`. Así el filtro es linkeable y
@@ -289,7 +315,9 @@ confinada a `components/` y a `EditorPolygono`. Los componentes declarativos (`P
 ## Auth y permisos
 
 **El `X-API-Key` no se toca desde el browser.** Autoriza escrituras y ponerlo en el bundle
-lo publica. Quedó sólo para la ingesta desde SAP; `/zonas/` ya no lo acepta.
+lo publica. Quedó sólo para la ingesta desde SAP. El costo de OS la usaba y dejó de hacerlo
+justamente para que el botón de calcular fuera posible: ahora va con sesión más
+`ordenes_servicio.calcular_costo`.
 
 `features/auth/` es dueño de todo esto. `/login` es la única ruta pública; todo lo demás
 cuelga de `_authenticated`, un layout pathless cuyo `beforeLoad` hace
@@ -385,9 +413,16 @@ Mantine los consulta**, así que sin esos mocks cualquier render con `MantinePro
 explota. El mock de `ResizeObserver` dejó de ser sólo de Mantine: `MapaBase` lo usa para su
 `invalidateSize`, así que sacarlo ahora rompe el mapa también.
 
-Los tres archivos de test cubren exactamente lo que es silencioso cuando se rompe:
+Los archivos de test cubren exactamente lo que es silencioso cuando se rompe:
 
 - `src/app/providers.test.tsx` — smoke test del árbol de providers.
+- `src/lib/date.test.ts` — el ida y vuelta entre el reloj de pared naive del picker y el ISO con
+  offset del backend. Es el que más paga después de `geojson`: un ISO naive es 422 y un offset
+  tomado de la zona del browser guarda la fecha corrida sin que nadie se entere.
+- `src/lib/money.test.ts` — el formateo del `Decimal`-string, incluido el caso vacío que
+  `Number("")` convierte en un `$ 0,00` que parece un precio real.
+- `rangoUltimoMes()` está cubierto en `date.test.ts`: que el extremo derecho sea **hoy** y no
+  ayer, porque si no lo del día no se ve al entrar a la pantalla.
 - `src/lib/geojson.test.ts` — las conversiones `[lng,lat]`↔`[lat,lng]` y el cierre de anillos.
   Es el que más paga: `lib/geojson.ts` no importa leaflet, y un polígono invertido se dibuja
   en otro continente sin tirar un error.
@@ -404,13 +439,59 @@ el cableado, no el render.
 
 ## Pendientes conocidos
 
-- **Hay dos pantallas de dominio: `/zonas` y `/ubicaciones`.** Zonas tiene alta, edición y baja
-  con mapa, más la capa opcional de puntos. Ubicaciones tiene **sólo edición** —nacen de la
-  ingesta de SAP— con dos filtros (pendientes de validar, sin coordenada) y el punto elegido en
-  el mapa.
+- **Hay tres pantallas de dominio: `/zonas`, `/ubicaciones` y `/ordenes-servicio`.** Zonas tiene
+  alta, edición y baja con mapa, más la capa opcional de puntos. Ubicaciones tiene **sólo
+  edición** —nacen de la ingesta de SAP— con dos filtros (pendientes de validar, sin coordenada)
+  y el punto elegido en el mapa. Órdenes de servicio también es **sólo edición**, por lo mismo:
+  búsqueda por número de ticket o remito, rango de fecha de viaje, tres switches, la columna de
+  ticket, el detalle con tickets y remitos, y el cálculo del costo.
+- **La pantalla de OS arranca con un rango de fechas puesto: los últimos 30 días.** El default
+  lo inyecta `validateSearch` (`rangoUltimoMes()` de `lib/date.ts`), así que **nunca queda sin
+  rango**: limpiarlo vuelve al default. Por eso el `DateRangePicker` va **sin `clearable`** —
+  una X que no llega a limpiar nada se siente rota— y por eso `DateRangePicker` tiene un preset
+  "Últimos 30 días", que es la única forma de volver al default después de cambiarlo.
+- **La pantalla también arranca mostrando sólo las facturables.** Un default que filtra necesita
+  un control que sepa decir "traeme el resto": con un switch `facturable` a secas, apagarlo
+  volvería al default y no habría forma de ver las demás. Por eso el search param es
+  **`incluir_no_facturables`, invertido**, y `ordenesServicioQueryOptions` lo traduce a
+  `facturable: true | undefined` antes de pegarle a la API. **Es el único lugar donde el search
+  y el query param de la API no se llaman igual**, y la traducción vive en `api.ts`, que es
+  quien es dueño del contrato.
+- **Un rango por default esconde las OS sin `fecha_viaje`**, que son justo las que hay que
+  completar. De ahí el switch "Incluir sin fecha de viaje", que las trae además del rango. Sin
+  ese control el trabajo pendiente se vuelve invisible, que es la regla de "nada de fallas
+  silenciosas" aplicada a un filtro.
+- **Los dos switches de "Incluir…" son el idioma de esta pantalla**, y no es casual: cada vez
+  que un default filtra, el control se nombra por lo que agrega, no por lo que restringe. Un
+  "Sólo X" apagado no puede representar nada cuando el default ya es X.
+- **La caja de búsqueda va con `useDebouncedValue` a 300 ms.** El valor visible es estado local
+  y el debounced es el que navega: sin eso cada tecla dispara el loader y una navegación, y el
+  input se siente trabado.
+- **El botón de calcular costo se deshabilita con el formulario sucio**, y no es una
+  formalidad: el POST costea lo que hay **guardado en el servidor**, así que con cambios sin
+  guardar mostraría un número que no se corresponde con lo que el usuario tiene en pantalla. Es
+  la regla de "nada de fallas silenciosas" aplicada a un botón. El aviso dice por qué está
+  bloqueado, en vez de dejarlo gris y mudo.
+- **El costeo es el endpoint más rico en `business_rule` del repo** y sus mensajes son lo único
+  que le explica al usuario por qué falló: OS no facturable, sin `fecha_viaje`, sin tarifario
+  vigente, tarifa no resuelta (`detail.motivo` ∈ `sin_coordenadas`/`sin_zona_comun`/`sin_tarifa`),
+  vía sin punto de salida, ticket sin egreso, concepto de cámara faltante, tarifario ambiguo
+  (409). Por eso van a un `<Alert>` dentro del modal y no a un toast que se va solo.
+- **Los `<Select>` de la OS salen del endpoint `/opciones`, no de constantes.** `tipo_operacion`,
+  `tipo_camion` y `via` son `StrEnum` del backend, y hardcodearlos —como todavía hace
+  `UbicacionFormModal` con `TIPOS`— hace que agregar un valor al enum pase desapercibido.
+- **La fila de una OS se expande y muestra sus tickets** con ingreso, egreso y estadía
+  (`TicketsDeOrden`, reusado tal cual en el modal). La columna de tickets concatenados se
+  conserva igual: es lo que permite barrer la tabla sin abrir nada. Una OS **sin** tickets no
+  tiene chevron, en vez de abrir un panel vacío.
+- **La estadía no se calcula en el frontend.** Viene en `TicketOut.dias_estadia` porque es el
+  mismo número que multiplica `precio_dia` en el costo: restarlo acá lo haría divergir del costo
+  sin que nadie se entere. Un ingreso 23:57 y un egreso 01:00 son **1 día**, no una hora — hay
+  filas reales así en la base.
 - **La tabla de ubicaciones no tiene búsqueda por texto.** Son ~1785 filas en 90 páginas de 20,
-  así que encontrar un código puntual es incómodo. `DataTable` ya cablea `getFilteredRowModel()`
-  pero no expone estado de `globalFilter`; agregarlo es client-side y sin costo de backend.
+  así que encontrar un código puntual es incómodo. Los dos componentes de tabla ya cablean
+  `getFilteredRowModel()` pero ninguno expone estado de `globalFilter`; agregarlo es client-side
+  y sin costo de backend.
 - **Editar una ubicación la marca como validada**, y por eso el botón dice "Guardar y validar".
   La dirección se muestra read-only: es la referencia para saber dónde va el punto, pero
   corregirla sería re-geolocalizar y el upsert de SAP la vuelve a traer.

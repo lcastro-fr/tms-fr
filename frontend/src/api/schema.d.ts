@@ -109,6 +109,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ordenes-servicio/opciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Valores posibles de tipo de operación, tipo de camión y vía */
+        get: operations["opcionesOrdenServicio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ordenes-servicio/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista las órdenes de servicio activas con su costo vigente */
+        get: operations["listarOrdenesServicio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ordenes-servicio/{orden_servicio_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obtiene una orden de servicio con su costo, sus tickets y sus remitos */
+        get: operations["obtenerOrdenServicio"];
+        /**
+         * Corrige los datos de planificación de una orden de servicio
+         * @description No recalcula el costo: el costo vigente que devuelve puede haber quedado viejo respecto de los datos nuevos.
+         */
+        put: operations["actualizarOrdenServicio"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/zonas/": {
         parameters: {
             query?: never;
@@ -211,7 +266,7 @@ export interface components {
          * PermisoCodigo
          * @enum {string}
          */
-        PermisoCodigo: "zonas.ver" | "zonas.crear" | "zonas.editar" | "zonas.eliminar" | "ubicaciones.ver" | "ubicaciones.editar";
+        PermisoCodigo: "zonas.ver" | "zonas.crear" | "zonas.editar" | "zonas.eliminar" | "ubicaciones.ver" | "ubicaciones.editar" | "ordenes_servicio.ver" | "ordenes_servicio.editar" | "ordenes_servicio.calcular_costo";
         /** SesionOut */
         SesionOut: {
             /** Id */
@@ -365,6 +420,191 @@ export interface components {
              */
             calculado_at: string;
         };
+        /** OpcionOut */
+        OpcionOut: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+        };
+        /** OrdenServicioOpcionesOut */
+        OrdenServicioOpcionesOut: {
+            /** Tipos Operacion */
+            tipos_operacion: components["schemas"]["OpcionOut"][];
+            /** Tipos Camion */
+            tipos_camion: components["schemas"]["OpcionOut"][];
+            /** Vias */
+            vias: components["schemas"]["OpcionOut"][];
+        };
+        /** OrdenesServicioFilters */
+        OrdenesServicioFilters: {
+            /** Facturable */
+            facturable?: boolean | null;
+            /** Con Costo */
+            con_costo?: boolean | null;
+            /** Numero */
+            numero?: string | null;
+            /** Fecha Viaje Desde */
+            fecha_viaje_desde?: string | null;
+            /** Fecha Viaje Hasta */
+            fecha_viaje_hasta?: string | null;
+            /** Incluir Sin Fecha */
+            incluir_sin_fecha?: boolean | null;
+        };
+        /** OrdenServicioOut */
+        OrdenServicioOut: {
+            /** Id */
+            id: number;
+            /** Origen Id */
+            origen_id: number;
+            /** Origen Codigo */
+            origen_codigo: string | null;
+            /** Origen Nombre */
+            origen_nombre: string;
+            /** Transportista Id */
+            transportista_id: number;
+            /** Transportista Razon Social */
+            transportista_razon_social: string;
+            /** Fecha Viaje */
+            fecha_viaje: string | null;
+            /** Tipo Operacion */
+            tipo_operacion: string;
+            /** Tipo Camion */
+            tipo_camion: string | null;
+            /** Via */
+            via: string;
+            /** Hombreador */
+            hombreador: boolean;
+            /** Facturable */
+            facturable: boolean;
+            /** Active */
+            active: boolean;
+            costo?: components["schemas"]["CostoOrdenServicioOut"] | null;
+            /**
+             * Tickets
+             * @default []
+             */
+            tickets: components["schemas"]["TicketOut"][];
+        };
+        /** TicketOut */
+        TicketOut: {
+            /** Id */
+            id: number;
+            /** Numero */
+            numero: string;
+            /** Planta Codigo */
+            planta_codigo: string | null;
+            /** Planta Nombre */
+            planta_nombre: string;
+            /**
+             * Fecha Ingreso
+             * Format: date-time
+             */
+            fecha_ingreso: string;
+            /** Fecha Egreso */
+            fecha_egreso: string | null;
+            /** Dias Estadia */
+            dias_estadia: number | null;
+        };
+        /**
+         * OrdenServicioDetalleOut
+         * @description La OS con todo lo que cuelga de ella. Los remitos no van en la lista: son N por OS,
+         *     con M destinos cada uno.
+         */
+        OrdenServicioDetalleOut: {
+            /** Id */
+            id: number;
+            /** Origen Id */
+            origen_id: number;
+            /** Origen Codigo */
+            origen_codigo: string | null;
+            /** Origen Nombre */
+            origen_nombre: string;
+            /** Transportista Id */
+            transportista_id: number;
+            /** Transportista Razon Social */
+            transportista_razon_social: string;
+            /** Fecha Viaje */
+            fecha_viaje: string | null;
+            /** Tipo Operacion */
+            tipo_operacion: string;
+            /** Tipo Camion */
+            tipo_camion: string | null;
+            /** Via */
+            via: string;
+            /** Hombreador */
+            hombreador: boolean;
+            /** Facturable */
+            facturable: boolean;
+            /** Active */
+            active: boolean;
+            costo?: components["schemas"]["CostoOrdenServicioOut"] | null;
+            /**
+             * Tickets
+             * @default []
+             */
+            tickets: components["schemas"]["TicketOut"][];
+            /**
+             * Remitos
+             * @default []
+             */
+            remitos: components["schemas"]["RemitoOut"][];
+        };
+        /** RemitoDestinoOut */
+        RemitoDestinoOut: {
+            /** Ubicacion Id */
+            ubicacion_id: number;
+            /** Codigo */
+            codigo: string | null;
+            /** Nombre */
+            nombre: string;
+            /** Pais */
+            pais: string | null;
+        };
+        /** RemitoOut */
+        RemitoOut: {
+            /** Id */
+            id: number;
+            /** Numero */
+            numero: string;
+            /** Fecha */
+            fecha: string | null;
+            /** Destinos */
+            destinos: components["schemas"]["RemitoDestinoOut"][];
+        };
+        /** OrdenServicioIn */
+        OrdenServicioIn: {
+            /** Fecha Viaje */
+            fecha_viaje?: string | null;
+            tipo_operacion: components["schemas"]["TipoOperacion"];
+            tipo_camion?: components["schemas"]["TipoCamion"] | null;
+            via: components["schemas"]["Via"];
+            /**
+             * Hombreador
+             * @default false
+             */
+            hombreador: boolean;
+            /**
+             * Facturable
+             * @default false
+             */
+            facturable: boolean;
+        };
+        /**
+         * TipoCamion
+         * @enum {string}
+         */
+        TipoCamion: "chasis" | "balancin" | "semi";
+        /**
+         * TipoOperacion
+         * @enum {string}
+         */
+        TipoOperacion: "carga" | "camara";
+        /**
+         * Via
+         * @enum {string}
+         */
+        Via: "aerea" | "maritima" | "terrestre";
         /** GeoJSONPolygon */
         GeoJSONPolygon: {
             /**
@@ -896,6 +1136,353 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CostoOrdenServicioOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    opcionesOrdenServicio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrdenServicioOpcionesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listarOrdenesServicio: {
+        parameters: {
+            query?: {
+                facturable?: boolean | null;
+                con_costo?: boolean | null;
+                numero?: string | null;
+                fecha_viaje_desde?: string | null;
+                fecha_viaje_hasta?: string | null;
+                incluir_sin_fecha?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrdenServicioOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    obtenerOrdenServicio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orden_servicio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrdenServicioDetalleOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    actualizarOrdenServicio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orden_servicio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrdenServicioIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrdenServicioOut"];
                 };
             };
             /** @description Bad Request */

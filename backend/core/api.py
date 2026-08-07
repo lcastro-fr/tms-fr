@@ -4,6 +4,7 @@ from ninja import NinjaAPI
 
 from catalog.api import ubicaciones_router, zonas_router
 from core.api_errors import register_exception_handlers
+from logistica.api import ordenes_servicio_router
 from tracking.api import ordenes_router
 from tracking.api import router as tracking_router
 from users.api import auth_router
@@ -21,5 +22,6 @@ register_exception_handlers(api)
 api.add_router("/auth/", auth_router)
 api.add_router("/tickets/", tracking_router)
 api.add_router("/ordenes-servicio/", ordenes_router)
+api.add_router("/ordenes-servicio/", ordenes_servicio_router)
 api.add_router("/zonas/", zonas_router)
 api.add_router("/ubicaciones/", ubicaciones_router)

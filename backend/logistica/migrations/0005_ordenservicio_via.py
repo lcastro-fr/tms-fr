@@ -4,15 +4,18 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('logistica', '0004_ordenservicio_tipo_operacion_and_more'),
+        ("logistica", "0004_ordenservicio_tipo_operacion_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='ordenservicio',
-            name='via',
-            field=models.CharField(choices=[('aerea', 'Aerea'), ('maritima', 'Maritima'), ('terrestre', 'Terrestre')], default='terrestre', max_length=20),
+            model_name="ordenservicio",
+            name="via",
+            field=models.CharField(
+                choices=[("aerea", "Aerea"), ("maritima", "Maritima"), ("terrestre", "Terrestre")],
+                default="terrestre",
+                max_length=20,
+            ),
         ),
     ]

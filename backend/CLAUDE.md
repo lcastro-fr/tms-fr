@@ -17,8 +17,20 @@ api.py       Adaptadores HTTP de 3 líneas. Lo único que importa ninja.
 enums.py     StrEnum + su lista *_CHOICES derivada.
 ```
 
-Dependencias en una sola dirección: `api → use_cases → services → models`.
-Entre apps: `tracking → logistica → transportista`, y todos → `catalog`. Nunca al revés.
+Dependencias en una sola dirección: `api → use_cases → services → models`. **Esa sí es una
+regla dura.**
+
+Entre apps el default es `tracking → logistica → transportista`, y todos → `catalog`. Eso es
+una **guía, no una restricción**: existe para que el acoplamiento no crezca solo, no para
+forzar diseños peores. Cuando respetarla sale más caro que cruzarla —partir una entidad en dos
+apps, duplicar DTOs, mudar un endpoint de lugar— se cruza y se anota acá.
+
+Hoy hay **una** excepción: `logistica.use_cases` importa `tracking.services` para que la OS
+exponga sus tickets y sus remitos. La alternativa era mudar `GET /ordenes-servicio/{id}` a
+`tracking` y dejar el CRUD de la OS repartido en dos archivos. Lo único que sí hay que
+verificar al cruzar es que no se arme un ciclo de imports; acá no lo hay, porque
+`tracking.services` sólo importa `logistica.models`, que no importa nada de `logistica`
+hacia arriba.
 
 ### Las apps
 
@@ -26,7 +38,7 @@ Entre apps: `tracking → logistica → transportista`, y todos → `catalog`. N
 |---|---|---|---|
 | `catalog` | `Pais`, `Ubicacion`, `Zona` | zonas (CRUD) | Datos maestros y geo. Todos dependen de acá. |
 | `transportista` | `Transportista`, `Tarifario`, `TarifaFlete`, `ConceptoAdicional`, `TarifaConceptoAdicional` | — | Tarifarios con vigencia. Sin `use_cases/`. |
-| `logistica` | `OrdenServicio`, `CostoOrdenServicio` | — | Sin `use_cases/`: el de costo vive en `tracking`. |
+| `logistica` | `OrdenServicio`, `CostoOrdenServicio` | órdenes de servicio (lectura y edición) | El use case del costo vive en `tracking`, no acá. |
 | `tracking` | `Ticket`, `Remito`, `RemitoDestino` | ingesta, costo de OS | La punta de entrada. |
 | `users` | `User` (login por email, `username = None`), `Permiso`, `Rol`, `UsuarioRol`, `RolPermiso` | auth (login/logout/me/csrf) | `AUTH_USER_MODEL` y el RBAC. La gestión de roles es sólo por admin. |
 
@@ -93,7 +105,7 @@ saberlo antes de buscarlo en `logistica/`.
 
 ## La API hoy
 
-Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **trece operaciones**:
+Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **diecisiete operaciones**:
 
 | Método | Path | Auth | Entrada | Salida |
 |---|---|---|---|---|
@@ -102,7 +114,11 @@ Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **trece oper
 | POST | `/api/v1/auth/logout` | sesión | — | 204 |
 | GET | `/api/v1/auth/me` | sesión | — | 200 `SesionOut` |
 | POST | `/api/v1/tickets/ingest` | `X-API-Key` | `TicketIngestIn` | 201 `TicketIngestOut` |
-| POST | `/api/v1/ordenes-servicio/{id}/costo` | `X-API-Key` | — | 200 `CostoOrdenServicioOut` |
+| POST | `/api/v1/ordenes-servicio/{id}/costo` | `ordenes_servicio.calcular_costo` | — | 200 `CostoOrdenServicioOut` |
+| GET | `/api/v1/ordenes-servicio/opciones` | `ordenes_servicio.ver` | — | 200 `OrdenServicioOpcionesOut` |
+| GET | `/api/v1/ordenes-servicio/` | `ordenes_servicio.ver` | `Query[OrdenesServicioFilters]` | 200 `list[OrdenServicioOut]` |
+| GET | `/api/v1/ordenes-servicio/{id}` | `ordenes_servicio.ver` | — | 200 `OrdenServicioDetalleOut` |
+| PUT | `/api/v1/ordenes-servicio/{id}` | `ordenes_servicio.editar` | `OrdenServicioIn` | 200 `OrdenServicioOut` |
 | GET | `/api/v1/zonas/` | `zonas.ver` | — | 200 `list[ZonaOut]` |
 | POST | `/api/v1/zonas/` | `zonas.crear` | `ZonaIn` | 201 `ZonaOut` |
 | GET | `/api/v1/zonas/{id}` | `zonas.ver` | — | 200 `ZonaOut` |
@@ -111,12 +127,93 @@ Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **trece oper
 | GET | `/api/v1/ubicaciones/` | `ubicaciones.ver` | `Query[UbicacionesFilters]` | 200 `list[UbicacionOut]` |
 | PUT | `/api/v1/ubicaciones/{id}` | `ubicaciones.editar` | `UbicacionIn` | 200 `UbicacionOut` |
 
-Todas declaran `**ERRORS` (400/401/403/404/409/422/500 → `ErrorOut`). **Zonas y ubicaciones no
-aceptan `X-API-Key`**: son browser-only. La `X-API-Key` quedó exclusivamente para la ingesta y
-el costo de OS, que son máquina-a-máquina. No hay `/health` y no hay paginación: los GET de
-lista devuelven el array completo sin envelope.
+Todas declaran `**ERRORS` (400/401/403/404/409/422/500 → `ErrorOut`). **Todo lo de dominio es
+browser-only**: la `X-API-Key` quedó **exclusivamente para la ingesta**. El costo de OS la
+aceptaba y dejó de hacerlo cuando la pantalla de órdenes de servicio necesitó el botón de
+calcular — costear es una acción de usuario, no máquina a máquina, y la key no se puede poner
+en el bundle sin publicarla. No hay `/health` y no hay paginación: los GET de lista devuelven
+el array completo sin envelope.
 
-**`UbicacionesFilters` es el primer y único DTO `...Filters`.** `Query[UbicacionesFilters]` con
+**`/ordenes-servicio/` lo sirven dos routers montados sobre el mismo prefijo**, y no es un
+descuido: el CRUD vive en `logistica/api.py` y el POST del costo en `tracking/api.py`, porque
+`CalcularCostoOrdenServicioUseCase` importa `RemitoService` y `TicketService` y **`logistica` no
+puede importar `tracking`**. `add_router` admite repetir prefijo mientras no sea el mismo router
+(ahí haría falta `url_name_prefix`), y los paths no chocan porque el converter `int:` hace que
+`/opciones` no matchee la ruta de id.
+
+**La OS no tiene alta ni baja por API**, igual que ubicaciones: nace de la ingesta de SAP. El
+PUT toca sólo los seis campos que la ingesta no sabe llenar — `fecha_viaje`, `tipo_operacion`,
+`tipo_camion`, `via`, `hombreador`, `facturable` — y **no recalcula el costo**: el
+`CostoOrdenServicioOut` que devuelve puede haber quedado viejo respecto de lo que se acaba de
+guardar. Recalcular es el POST, explícito, y la SPA bloquea el botón mientras el formulario esté
+sucio.
+
+`GET /ordenes-servicio/opciones` existe porque `tipo_operacion`, `tipo_camion` y `via` **son
+`StrEnum`, no tablas**. Sale de los `*_CHOICES` ya derivados al lado de cada enum, así que
+agregar un valor al enum lo publica solo. Es una sola operación con las tres listas y no tres
+endpoints: el formulario las necesita juntas.
+
+`OrdenServicioOut` desnormaliza `origen_codigo`/`origen_nombre` y `transportista_razon_social`
+porque **no hay API de transportistas**: sin eso la tabla mostraría ids pelados. El costo vigente
+viaja embebido en `costo` (`null` si nunca se calculó) para que abrir la pantalla no pida un
+request por fila. En la lista lo resuelve `CostoOrdenServicioService.get_costos_vigentes`, una
+query para todas; el `from_model` **lo recibe por parámetro** en vez de leer `orden.costos`,
+porque el ORM vive sólo en `services/`. Lo mismo vale para `tickets`.
+
+**`TicketOut.dias_estadia` sale del mismo lugar que el costo.** `TicketService.dias_estadia`
+es la única implementación de la regla —diferencia de **fechas** en `TZ_OPERACION`, porque la
+estadía empieza cuando cambia el día— y `get_dias_permanencia` la suma en vez de repetirla.
+Es el número que multiplica `precio_dia`, así que si la pantalla lo calculara por su cuenta
+podría mostrar algo distinto de lo que se factura. Hay filas reales que lo prueban: un ticket que
+entra 23:57 y sale 01:00 es **1 día**, y uno que entra 14:42 y sale 19:09 del mismo día es **0**.
+
+La diferencia entre los dos métodos es qué hacen sin egreso: `dias_estadia` devuelve `None` y
+`get_dias_permanencia` levanta `TicketSinEgresoError`. **Es a propósito**: no poder costear una
+OS no puede impedir mostrarla, así que el DTO viaja con `null` y la pantalla lo marca.
+
+**La lista y el detalle son dos formas distintas a propósito.** `OrdenServicioOut` lleva
+`tickets` —el número de ticket es el código con el que la empresa identifica el trabajo, y es
+uno por OS: no pesa—, y `OrdenServicioDetalleOut` hereda de ella y **suma `remitos` con sus
+destinos**, que son N por OS con M destinos cada uno. Heredar en vez de duplicar campos es lo
+que evita que las dos se desincronicen; `from_model` devuelve `Self` y acepta `**extra` para
+que la subclase reuse el mapeo.
+
+`RemitoService.list_by_orden_servicio` resuelve remitos y destinos en dos queries con un
+`Prefetch`. Dos cosas que no son opcionales: el `active=True` **explícito** en la queryset del
+prefetch (la damos nosotros, así que el manager por default no la filtra), y el `order_by`
+explícito en los dos niveles — `Remito.Meta` **no tiene `ordering`** y `RemitoDestino` **no
+tiene campo de secuencia**, así que sin eso el orden en pantalla cambia entre requests.
+
+### Los filtros de la lista
+
+`OrdenesServicioFilters` tiene seis. Los tres que se agregaron con la búsqueda:
+
+- **`numero`** matchea con `icontains` contra el número de **ticket o de remito**, por travesía
+  inversa (`tickets__numero`, `remitos__numero`). El `.distinct()` **no es opcional**: son dos
+  joins multivaluados y una OS con dos tickets que matchean sale repetida — con los datos del
+  seed, sin él una OS aparece tres veces. Y va `active=True` explícito en cada salto.
+- **`fecha_viaje_desde` / `fecha_viaje_hasta`** son `date`, no `AwareDatetime`, y **no
+  contradice** la regla de fechas aware: lo que viaja es un día del calendario y el backend lo
+  resuelve a instantes en `TZ_OPERACION`. `hasta` suma un día y compara con `__lt`, así que
+  incluye el día entero. El borde importa de verdad: una OS a las `02:57Z` del 3 de febrero es
+  el **2 de febrero** en Buenos Aires, y con un `__date` ingenuo se corre un día entero sin que
+  nadie lo note.
+- **`incluir_sin_fecha`** sólo tiene efecto con un rango puesto: sin rango las OS sin
+  `fecha_viaje` ya entran igual. Existe porque un rango las excluye por definición, y son justo
+  las que hay que completar; sin este flag se vuelven invisibles desde que la pantalla arrancó
+  con un rango por default.
+
+**`numero` está indexado con trigramas.** `icontains` es `ILIKE '%…%'`, que ningún B-tree puede
+servir, así que `ticket` y `remito` tienen un `GinIndex` con `gin_trgm_ops` sobre `numero`
+(`idx_ticket_numero_trgm`, `idx_remito_numero_trgm`) y `django.contrib.postgres` está en
+`INSTALLED_APPS`. La extensión la crea la migración `tracking.0002` con `TrigramExtension()`,
+que **va antes de los `AddIndex`** porque sin ella `gin_trgm_ops` no existe. `CREATE EXTENSION`
+pide superuser: donde el usuario de la app no lo sea, la extensión la crea un DBA antes de
+migrar. Con menos de 3 caracteres el índice no aplica —un trigrama son tres— y Postgres vuelve
+al seq scan; no es un problema, pero explica por qué un `EXPLAIN` de prueba necesita un patrón
+de 3 o más.
+
+**`UbicacionesFilters` fue el primer DTO `...Filters`; `OrdenesServicioFilters` lo copia.** `Query[UbicacionesFilters]` con
 un `pydantic.BaseModel` pelado funciona —no hace falta `ninja.Schema`— y ninja lo aplana en un
 `parameters` por campo **además** de emitir `components.schemas.UbicacionesFilters`, así que el
 frontend lo aliasea por nombre como cualquier otro DTO. Ese component queda **huérfano** (nada
@@ -447,9 +544,9 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
   más; hasta que se complete la lista, cualquier destino extranjero de SAP cae en
   `destinos_sin_pais` y su OS no se puede costear.
 - **Los tests son los de auth/RBAC (`conftest.py` + `users/tests/`), los de catalog, los de
-  `logistica/tests/` (resolución de destinos por vía y costeo) y los de la geolocalización de
-  la ingesta** (`tracking/tests/`, con un `Geocoder` falso inyectado para no tocar la red — es
-  para eso que el use case recibe el geocoder por constructor).
+  `logistica/tests/` (resolución de destinos por vía, costeo y la API de órdenes de servicio) y
+  los de la geolocalización de la ingesta** (`tracking/tests/`, con un `Geocoder` falso inyectado
+  para no tocar la red — es para eso que el use case recibe el geocoder por constructor).
   `shared/models.py` sigue siendo el código más delicado del repo y sigue sin cobertura propia.
   Los tests van en un directorio `tests/`, no en un `test_*.py` suelto: el per-file-ignore de
   `S101` es `*/tests/*`.
@@ -461,8 +558,22 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
   rechazar remitos válidos. Confirmar el alcance real con SAP.
 - `OrdenServicio` sólo tiene dos FKs y algunos flags: sin número, sin estado, sin fechas
   planificadas. El paso 3 necesita al menos estado y fechas.
-- **No hay API de lectura** de tickets, órdenes de servicio, remitos ni transportistas — sólo
-  el admin. Ubicaciones tiene lista y PUT, pero no alta ni baja (a propósito: nacen de SAP).
+- **No hay API de lectura propia** de tickets, remitos ni transportistas — sólo el admin. Los
+  tickets y remitos se leen **colgados de su OS** (`OrdenServicioDetalleOut`), que alcanza para
+  la pantalla pero no para buscarlos por sí solos. Ubicaciones y órdenes de servicio tienen
+  lista y PUT, pero no alta ni baja (a propósito: nacen de SAP).
+- **La búsqueda por `numero` no dice cuál de los dos matcheó.** Si el texto coincide con un
+  remito y no con el ticket, la fila igual aparece y en la columna Ticket se ve otro número.
+  Devolver el motivo del match pediría cambiar el DTO de la lista.
+- **`facturable` se infiere una sola vez, en la ingesta**, mirando si hay tarifario vigente para
+  el transportista. Cargar un tarifario después **no** da vuelta las OS ya creadas: hay que
+  marcarlas a mano desde la pantalla. Un recálculo masivo, o inferirlo en el momento de costear,
+  es la salida prolija.
+- **El filtro `con_costo` no se puede combinar con paginación tal como está.** Es un
+  `filter`/`exclude` sobre `Q(costos__active=True)`; el `filter` haría join y duplicaría filas si
+  alguna vez hubiera más de un costo activo por OS. Hoy la unique parcial
+  `uq_costo_orden_servicio_active` lo garantiza, así que no duplica — pero la garantía es esa
+  constraint, no el queryset.
 - **Sin paginación.** `GET /zonas/` devuelve todas las zonas activas con su polígono completo, y
   `GET /ubicaciones/` **las ~1785 filas del seed** en una sola respuesta (~350 KB). Es el primer
   candidato real a paginar. `UbicacionesFilters` sólo filtra por `validada`; un `con_coordenadas`

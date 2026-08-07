@@ -80,12 +80,17 @@ def transportista(db):
 
 @pytest.fixture
 def crear_orden(crear_ubicacion, transportista):
+    planta: list[Ubicacion] = []
+
     def _crear(via: str = Via.TERRESTRE.value, **extra):
-        origen = crear_ubicacion("PL01", tipo=TipoUbicacion.PLANTA.value, nombre="Planta")
+        if not planta:
+            planta.append(crear_ubicacion("PL01", tipo=TipoUbicacion.PLANTA.value, nombre="Planta"))
+        origen = planta[0]
         return OrdenServicioService.create_orden_servicio(
             origen_id=origen.id,
             transportista_id=transportista.id,
             fecha_viaje=extra.pop("fecha_viaje", FECHA_VIAJE),
+            facturable=extra.pop("facturable", True),
             via=via,
             **extra,
         )

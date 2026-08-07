@@ -76,6 +76,13 @@ def test_los_destinos_del_costo_son_los_resueltos_no_los_crudos(
     assert costo.cantidad_destinos == 1
 
 
+def test_una_os_no_facturable_no_se_costea(crear_orden, tarifario):
+    orden = crear_orden(facturable=False, tipo_camion=TipoCamion.SEMI.value)
+
+    with pytest.raises(CalcularCostoOrdenServicioUseCase.OrdenServicioNoFacturable):
+        CalcularCostoOrdenServicioUseCase.execute(orden.id)
+
+
 def test_una_os_terrestre_con_destino_extranjero_no_se_costea(
     crear_orden, crear_ubicacion, tarifario
 ):

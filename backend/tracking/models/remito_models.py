@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 
 from catalog.models import Ubicacion
@@ -25,6 +26,13 @@ class Remito(BaseModel):
                 condition=models.Q(active=True),
                 name="uq_remito_numero_active",
             )
+        ]
+        indexes = [
+            GinIndex(
+                fields=["numero"],
+                name="idx_remito_numero_trgm",
+                opclasses=["gin_trgm_ops"],
+            ),
         ]
 
     def __str__(self) -> str:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 
 from catalog.models import Ubicacion
@@ -32,6 +33,13 @@ class Ticket(BaseModel):
                 condition=models.Q(fecha_egreso__isnull=True)
                 | models.Q(fecha_egreso__gte=models.F("fecha_ingreso")),
                 name="ck_ticket_egreso_posterior_a_ingreso",
+            ),
+        ]
+        indexes = [
+            GinIndex(
+                fields=["numero"],
+                name="idx_ticket_numero_trgm",
+                opclasses=["gin_trgm_ops"],
             ),
         ]
 

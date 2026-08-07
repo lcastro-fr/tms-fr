@@ -15,9 +15,7 @@ def test_crea_una_fila_por_codigo_del_enum():
     assert creados == len(PermisoCodigo)
     assert actualizados == 0
     assert retirados == []
-    assert set(Permiso.objects.values_list("codigo", flat=True)) == {
-        p.value for p in PermisoCodigo
-    }
+    assert set(Permiso.objects.values_list("codigo", flat=True)) == {p.value for p in PermisoCodigo}
 
 
 def test_es_idempotente():

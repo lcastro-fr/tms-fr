@@ -40,7 +40,7 @@ class IngestTicketUseCase:
         facturable = True
         try:
             _ = TarifarioService.get_tarifario_at(transportista.id, data.fecha_ingreso)
-        except (TarifarioService.TarifarioNotFoundError, TarifarioService.TarifaAmbiguaError):
+        except (TarifarioService.TarifarioNotFoundError, TarifarioService.TarifarioAmbiguoError):
             facturable = False
 
         orden_servicio = OrdenServicioService.create_orden_servicio(

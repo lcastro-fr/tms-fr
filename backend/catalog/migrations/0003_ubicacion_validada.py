@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('catalog', '0002_alter_zona_options_alter_zona_geom_and_more'),
+        ("catalog", "0002_alter_zona_options_alter_zona_geom_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='ubicacion',
-            name='validada',
+            model_name="ubicacion",
+            name="validada",
             field=models.BooleanField(default=True),
         ),
     ]

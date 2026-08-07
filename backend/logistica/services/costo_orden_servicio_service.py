@@ -15,6 +15,11 @@ class CostoOrdenServicioService:
         return CostoOrdenServicio.objects.filter(orden_servicio_id=orden_servicio_id).first()
 
     @staticmethod
+    def get_costos_vigentes(orden_servicio_ids: list[int]) -> dict[int, CostoOrdenServicio]:
+        costos = CostoOrdenServicio.objects.filter(orden_servicio_id__in=orden_servicio_ids)
+        return {costo.orden_servicio_id: costo for costo in costos}
+
+    @staticmethod
     def replace_costo(
         orden_servicio: OrdenServicio,
         precio_flete: Decimal,

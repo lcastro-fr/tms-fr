@@ -9,9 +9,7 @@ from shared.permisos import PermisoCodigo
 if TYPE_CHECKING:
     from users.models import User
 
-Email = Annotated[
-    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=254)
-]
+Email = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=254)]
 
 
 class LoginIn(BaseModel):

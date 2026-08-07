@@ -16,9 +16,7 @@ class AutenticacionService:
     def iniciar_sesion(request: HttpRequest, email: str, password: str) -> User:
         user = authenticate(request, username=email, password=password)
         if user is None:
-            raise AutenticacionService.CredencialesInvalidasError(
-                "Email o contraseña incorrectos."
-            )
+            raise AutenticacionService.CredencialesInvalidasError("Email o contraseña incorrectos.")
         login(request, user)
         return user
 

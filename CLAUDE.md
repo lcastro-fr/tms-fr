@@ -19,7 +19,10 @@ Cuatro pasos, en orden. No adelantarse a los siguientes.
 2. **Eventos.** Registrar los eventos de cada ticket y calcular cuánto duró cada uno.
 3. **Orden de servicio.** Planificar la OS *antes* de que llegue el camión. Hoy
    `IngestTicketUseCase` crea una OS nueva por ticket; en este paso el ticket tiene que
-   poder colgarse de una OS preexistente.
+   poder colgarse de una OS preexistente. La pantalla `/ordenes-servicio` ya deja corregir a
+   mano lo que la ingesta no sabe llenar (`fecha_viaje`, `tipo_operacion`, `tipo_camion`, `via`,
+   `hombreador`, `facturable`) y disparar el costeo, pero **la OS sigue naciendo del ticket**:
+   no hay alta, ni `numero`, ni estado, ni fechas planificadas.
 4. **Ruteo.** Optimización logística con OpenRouteService (`lat`/`lng` ya están en
    `Ubicacion`).
 
@@ -168,9 +171,10 @@ Los de cada capa están en su documento. Estos cruzan las dos:
   tiene menos que eso, `pnpm dev/build/test` sólo corren adentro del contenedor.
 - **No hay `.env.example`**, aunque el arranque lo asumía (`cp .env.example .env`).
 - **La cobertura es parcial y desigual.** El backend tiene auth/RBAC (`users/tests/`), los
-  contratos de catalog (`catalog/tests/`), la resolución de destinos y el costeo de OS
+  contratos de catalog (`catalog/tests/`), la resolución de destinos, el costeo y la API de OS
   (`logistica/tests/`) y la geolocalización de la ingesta
-  (`tracking/tests/`); el frontend tiene las conversiones geo y el cableado de los dos mapas.
+  (`tracking/tests/`); el frontend tiene las conversiones geo, el cableado de los dos mapas y los
+  helpers de fecha y dinero (`lib/`).
   Sin cobertura: `shared/models.py` —el borrado lógico, el código más delicado del repo—,
   `transportista/` completo, y **no hay MSW**, así que en el frontend no se
   pueden testear estados de carga ni error del camino real de datos.

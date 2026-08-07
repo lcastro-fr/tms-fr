@@ -108,9 +108,7 @@ class Command(BaseCommand):
         except _DryRun:
             pass
 
-        self._report(
-            path, len(rows), creados, actualizados, errores, fuera_bbox, sin_pais, options
-        )
+        self._report(path, len(rows), creados, actualizados, errores, fuera_bbox, sin_pais, options)
 
     @staticmethod
     def _parse_coords(row: dict[str, str]) -> tuple[float | None, float | None, str | None]:
