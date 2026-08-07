@@ -7,6 +7,7 @@ from core.api_errors import register_exception_handlers
 from logistica.api import ordenes_servicio_router
 from tracking.api import ordenes_router
 from tracking.api import router as tracking_router
+from transportista.api import tarifarios_router
 from users.api import auth_router
 
 api = NinjaAPI(
@@ -25,3 +26,4 @@ api.add_router("/ordenes-servicio/", ordenes_router)
 api.add_router("/ordenes-servicio/", ordenes_servicio_router)
 api.add_router("/zonas/", zonas_router)
 api.add_router("/ubicaciones/", ubicaciones_router)
+api.add_router("/tarifarios/", tarifarios_router)

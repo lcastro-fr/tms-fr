@@ -27,6 +27,7 @@ const NAV: ItemDeNav[] = [
         to: "/ordenes-servicio",
         permiso: "ordenes_servicio.ver",
     },
+    { label: "Tarifarios", to: "/tarifarios", permiso: "tarifarios.ver" },
 ];
 
 function AuthenticatedLayout() {

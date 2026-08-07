@@ -84,6 +84,11 @@ class ZonaService:
         return list(Zona.objects.all())
 
     @staticmethod
+    def list_zonas_para_opciones() -> list[Zona]:
+        """Sin geom: quien sólo necesita poblar un <Select> no baja los polígonos."""
+        return list(Zona.objects.only("id", "nombre").order_by("nombre"))
+
+    @staticmethod
     def get_zona(zona_id: int) -> Zona | None:
         return Zona.objects.filter(pk=zona_id).first()
 

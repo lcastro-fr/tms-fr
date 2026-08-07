@@ -1,6 +1,5 @@
 from .costo_dtos import CostoOrdenServicioOut
 from .orden_servicio_dtos import (
-    OpcionOut,
     OrdenesServicioFilters,
     OrdenServicioDetalleOut,
     OrdenServicioIn,
@@ -13,7 +12,6 @@ from .orden_servicio_dtos import (
 
 __all__ = [
     "CostoOrdenServicioOut",
-    "OpcionOut",
     "OrdenServicioDetalleOut",
     "OrdenServicioIn",
     "OrdenServicioOpcionesOut",

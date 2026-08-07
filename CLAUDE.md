@@ -15,7 +15,9 @@ las dos capas. La arquitectura de cada capa vive en su propio documento:
 Cuatro pasos, en orden. No adelantarse a los siguientes.
 
 1. **Ingesta y costo.** Traer tickets ya conocidos desde SAP y calcular su costo.
-   Un ticket se crea cuando el camión llega.
+   Un ticket se crea cuando el camión llega. Los precios contra los que se costea se cargan
+   desde `/tarifarios`, la única pantalla con alta propia: un tarifario se guarda entero
+   —vigencia, tarifas de flete y conceptos adicionales— en un solo formulario.
 2. **Eventos.** Registrar los eventos de cada ticket y calcular cuánto duró cada uno.
 3. **Orden de servicio.** Planificar la OS *antes* de que llegue el camión. Hoy
    `IngestTicketUseCase` crea una OS nueva por ticket; en este paso el ticket tiene que
@@ -159,6 +161,9 @@ Los de cada capa están en su documento. Estos cruzan las dos:
 
 - **No hay API de gestión de usuarios ni roles.** El alta de usuarios, la creación de roles
   y la asignación se hacen 100% desde el admin de Django. La SPA sólo lee sus permisos.
+- **Los datos maestros del tarifario también son del admin.** Transportistas y
+  `ConceptoAdicional` se leen por API para poblar el formulario de tarifario, pero darlos de
+  alta sigue siendo un paso previo manual en el admin.
 - **El catálogo de permisos crece con el código.** `shared/permisos.py` es la fuente de
   verdad, así que agregar un permiso es un cambio de código más `manage.py sync_permisos`,
   no una fila cargada a mano.
@@ -172,11 +177,11 @@ Los de cada capa están en su documento. Estos cruzan las dos:
 - **No hay `.env.example`**, aunque el arranque lo asumía (`cp .env.example .env`).
 - **La cobertura es parcial y desigual.** El backend tiene auth/RBAC (`users/tests/`), los
   contratos de catalog (`catalog/tests/`), la resolución de destinos, el costeo y la API de OS
-  (`logistica/tests/`) y la geolocalización de la ingesta
-  (`tracking/tests/`); el frontend tiene las conversiones geo, el cableado de los dos mapas y los
-  helpers de fecha y dinero (`lib/`).
-  Sin cobertura: `shared/models.py` —el borrado lógico, el código más delicado del repo—,
-  `transportista/` completo, y **no hay MSW**, así que en el frontend no se
+  (`logistica/tests/`), la API de tarifarios (`transportista/tests/`) y la geolocalización de la
+  ingesta (`tracking/tests/`); el frontend tiene las conversiones geo, el cableado de los dos
+  mapas, los helpers de fecha y dinero (`lib/`) y el mapeo de errores de campo (`api/`).
+  Sin cobertura: `shared/models.py` —el borrado lógico, el código más delicado del repo—, y
+  **no hay MSW**, así que en el frontend no se
   pueden testear estados de carga ni error del camino real de datos.
 - **No hay historia de producción.** El `Dockerfile` del frontend es single-stage de dev
   (`CMD pnpm dev`) y el backend no tiene `STATIC_ROOT` ni `collectstatic`. Todo el setup

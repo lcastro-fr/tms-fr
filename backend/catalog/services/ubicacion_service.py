@@ -35,6 +35,11 @@ class UbicacionService:
         return list(qs.order_by("nombre"))
 
     @staticmethod
+    def list_ubicaciones_para_opciones() -> list[Ubicacion]:
+        """Sin coordinates ni dirección: son ~1785 filas y acá sólo se pobla un <Select>."""
+        return list(Ubicacion.objects.only("id", "codigo", "nombre").order_by("nombre"))
+
+    @staticmethod
     def get_ubicacion(ubicacion_id: int) -> Ubicacion | None:
         return Ubicacion.objects.filter(pk=ubicacion_id).first()
 

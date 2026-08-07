@@ -15,12 +15,13 @@ El frontend va detrás del backend, no delante. **Sólo se construyen pantallas 
 endpoints que existen.** Nada de inventar rutas ni mockear respuestas para adelantar UI:
 si falta el endpoint, el trabajo es en `../backend`.
 
-Hoy la API tiene diecisiete operaciones: cuatro de auth, cinco del CRUD de zonas
+Hoy la API tiene veinticuatro operaciones: cuatro de auth, cinco del CRUD de zonas
 (`/api/v1/zonas/`), dos de ubicaciones (`/api/v1/ubicaciones/`, lista con filtro y PUT), cinco de
 órdenes de servicio (`/api/v1/ordenes-servicio/`: opciones, lista con filtros, detalle, PUT y el
-POST del costo) y una de máquina. Zonas, ubicaciones y órdenes de servicio son las tres pantallas
-de dominio. Tickets sigue teniendo sólo la ingesta desde SAP, que es máquina a máquina; le falta
-API de lectura.
+POST del costo), siete de tarifarios (`/api/v1/tarifarios/`: opciones, lista con filtros, detalle,
+POST, PUT, cierre de vigencia y DELETE) y una de máquina. Zonas, ubicaciones, órdenes de servicio
+y tarifarios son las cuatro pantallas de dominio. Tickets sigue teniendo sólo la ingesta desde SAP,
+que es máquina a máquina; le falta API de lectura.
 
 ## Arquitectura
 
@@ -30,7 +31,7 @@ src/
   api/         schema.d.ts (generado), http.ts, errors.ts. Único lugar con axios.
   features/    una carpeta por app del backend
     catalog/         zonas, ubicaciones
-    transportista/   transportistas, tarifarios
+    transportista/   tarifarios (con sus tarifas de flete y de concepto)
     logistica/       órdenes de servicio, costos
     tracking/        tickets, remitos
   routes/      file-based. Sólo composición.
@@ -147,7 +148,13 @@ Hay tres cosas que ese interceptor tiene que tolerar:
   Ramificar por status acá mezcla las dos cosas.
 
 `fieldErrors(err)` traduce los `loc` de pydantic a la forma que espera `form.setErrors()`
-de Mantine.
+de Mantine. **Descarta el prefijo del transporte (`["body","payload"]`) y une el resto con
+puntos**, no se queda con el último segmento: dentro de una lista el `loc` es
+`["body","payload","tarifas_flete",0,"precio"]`, y quedarse con `"precio"` haría que dos
+filas distintas escriban sobre el mismo campo. `"tarifas_flete.0.precio"` es la ruta que
+`setErrors()` entiende para los items de una lista. Está cubierto en `errors.test.ts`,
+incluido el caso del error de **fila entera** (`loc` sin campo final, que es como llega el
+XOR zona/ubicación): ese no cae en ningún input, así que la fila lo renderiza aparte.
 
 Un 401 invalida la sesión y redirige a `/login` con el destino en search params, **salvo en
 `/auth/*`**, que maneja los suyos: el del login son credenciales inválidas y redirigir se
@@ -421,6 +428,9 @@ Los archivos de test cubren exactamente lo que es silencioso cuando se rompe:
   tomado de la zona del browser guarda la fecha corrida sin que nadie se entere.
 - `src/lib/money.test.ts` — el formateo del `Decimal`-string, incluido el caso vacío que
   `Number("")` convierte en un `$ 0,00` que parece un precio real.
+- `src/api/errors.test.ts` — el mapeo de `loc` a campo de formulario, sobre todo el caso
+  anidado: dos filas de una lista tienen que escribir en dos campos distintos, y un error de
+  fila entera no puede evaporarse.
 - `rangoUltimoMes()` está cubierto en `date.test.ts`: que el extremo derecho sea **hoy** y no
   ayer, porque si no lo del día no se ve al entrar a la pantalla.
 - `src/lib/geojson.test.ts` — las conversiones `[lng,lat]`↔`[lat,lng]` y el cierre de anillos.
@@ -439,12 +449,38 @@ el cableado, no el render.
 
 ## Pendientes conocidos
 
-- **Hay tres pantallas de dominio: `/zonas`, `/ubicaciones` y `/ordenes-servicio`.** Zonas tiene
+- **Hay cuatro pantallas de dominio: `/zonas`, `/ubicaciones`, `/ordenes-servicio` y
+  `/tarifarios`.** Zonas tiene
   alta, edición y baja con mapa, más la capa opcional de puntos. Ubicaciones tiene **sólo
   edición** —nacen de la ingesta de SAP— con dos filtros (pendientes de validar, sin coordenada)
   y el punto elegido en el mapa. Órdenes de servicio también es **sólo edición**, por lo mismo:
   búsqueda por número de ticket o remito, rango de fecha de viaje, tres switches, la columna de
-  ticket, el detalle con tickets y remitos, y el cálculo del costo.
+  ticket, el detalle con tickets y remitos, y el cálculo del costo. Tarifarios es el CRUD
+  completo, y el único con alta propia.
+- **El formulario de tarifario es el primero del repo con listas dinámicas.** Un solo
+  `useForm` tiene la vigencia más `tarifas_flete[]` y `tarifas_concepto[]`, y las filas se
+  agregan y sacan con `form.insertListItem` / `form.removeListItem` de `@mantine/form` — no
+  hizo falta ninguna dependencia nueva. Todo se guarda en **un POST/PUT**: el backend recibe
+  el tarifario entero, así que no hay estados intermedios que reconciliar si una fila falla.
+- **Cada fila de flete elige "alcance" (zona o ubicación) y recién después la referencia.**
+  En la API son dos campos excluyentes (`zona_id` XOR `ubicacion_id`); modelarlo como una
+  elección hace que el XOR se cumpla **por construcción** y deja al validador de pydantic
+  como red, no como primera línea. El `<Select>` de ubicaciones va `searchable` con
+  `limit={50}`: son ~1785 opciones.
+- **Las opciones del formulario salen de `/tarifarios/opciones`, no de `/zonas/` ni de
+  `/ubicaciones/`.** Un request, `staleTime: Infinity`, y —lo que importa— un usuario con
+  `tarifarios.editar` no necesita además `zonas.ver` y `ubicaciones.ver`.
+- **Un tarifario ya usado para costear abre en sólo lectura**, con un `<Alert>` que explica
+  por qué y las dos salidas: **Cerrar vigencia** y **Duplicar**. Dejarlo gris y mudo sería la
+  falla silenciosa; y sin Duplicar, "cargá uno nuevo" significaría retipear N filas a mano.
+  Duplicar es 100% frontend: copia las filas, tira los ids y la vigencia.
+- **El switch de la lista dice "Incluir históricos" y el filtro de la API es `vencidos`, no
+  `vigentes`.** No es lo mismo: un tarifario cargado con fecha de inicio futura todavía no
+  rige, y con un filtro de "vigentes ahora" **desaparecía de la pantalla apenas se guardaba**.
+  Es el mismo problema que las OS sin `fecha_viaje` escondidas por el rango por default.
+- **El precio se maneja como string de punta a punta.** `NumberInput` con
+  `decimalScale={2}` y separadores es-AR muestra `$ 1.500,55` pero entrega `1500.55`, que es
+  lo que viaja al backend: no hay `Number()` en el camino ni aritmética de pesos en float.
 - **La pantalla de OS arranca con un rango de fechas puesto: los últimos 30 días.** El default
   lo inyecta `validateSearch` (`rangoUltimoMes()` de `lib/date.ts`), así que **nunca queda sin
   rango**: limpiarlo vuelve al default. Por eso el `DateRangePicker` va **sin `clearable`** —

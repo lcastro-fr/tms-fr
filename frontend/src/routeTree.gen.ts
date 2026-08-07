@@ -13,6 +13,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedOrdenesServicioRouteImport } from './routes/_authenticated/ordenes-servicio'
+import { Route as AuthenticatedTarifariosRouteImport } from './routes/_authenticated/tarifarios'
 import { Route as AuthenticatedUbicacionesRouteImport } from './routes/_authenticated/ubicaciones'
 import { Route as AuthenticatedZonasRouteImport } from './routes/_authenticated/zonas'
 
@@ -36,6 +37,11 @@ const AuthenticatedOrdenesServicioRoute =
     path: '/ordenes-servicio',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedTarifariosRoute = AuthenticatedTarifariosRouteImport.update({
+  id: '/tarifarios',
+  path: '/tarifarios',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedUbicacionesRoute =
   AuthenticatedUbicacionesRouteImport.update({
     id: '/ubicaciones',
@@ -52,12 +58,14 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/login': typeof LoginRoute
   '/ordenes-servicio': typeof AuthenticatedOrdenesServicioRoute
+  '/tarifarios': typeof AuthenticatedTarifariosRoute
   '/ubicaciones': typeof AuthenticatedUbicacionesRoute
   '/zonas': typeof AuthenticatedZonasRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/ordenes-servicio': typeof AuthenticatedOrdenesServicioRoute
+  '/tarifarios': typeof AuthenticatedTarifariosRoute
   '/ubicaciones': typeof AuthenticatedUbicacionesRoute
   '/zonas': typeof AuthenticatedZonasRoute
   '/': typeof AuthenticatedIndexRoute
@@ -67,20 +75,34 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
   '/_authenticated/ordenes-servicio': typeof AuthenticatedOrdenesServicioRoute
+  '/_authenticated/tarifarios': typeof AuthenticatedTarifariosRoute
   '/_authenticated/ubicaciones': typeof AuthenticatedUbicacionesRoute
   '/_authenticated/zonas': typeof AuthenticatedZonasRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/ordenes-servicio' | '/ubicaciones' | '/zonas'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/ordenes-servicio'
+    | '/tarifarios'
+    | '/ubicaciones'
+    | '/zonas'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/ordenes-servicio' | '/ubicaciones' | '/zonas' | '/'
+  to:
+    | '/login'
+    | '/ordenes-servicio'
+    | '/tarifarios'
+    | '/ubicaciones'
+    | '/zonas'
+    | '/'
   id:
     | '__root__'
     | '/_authenticated'
     | '/login'
     | '/_authenticated/ordenes-servicio'
+    | '/_authenticated/tarifarios'
     | '/_authenticated/ubicaciones'
     | '/_authenticated/zonas'
     | '/_authenticated/'
@@ -121,6 +143,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOrdenesServicioRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/tarifarios': {
+      id: '/_authenticated/tarifarios'
+      path: '/tarifarios'
+      fullPath: '/tarifarios'
+      preLoaderRoute: typeof AuthenticatedTarifariosRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ubicaciones': {
       id: '/_authenticated/ubicaciones'
       path: '/ubicaciones'
@@ -140,6 +169,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteChildren {
   AuthenticatedOrdenesServicioRoute: typeof AuthenticatedOrdenesServicioRoute
+  AuthenticatedTarifariosRoute: typeof AuthenticatedTarifariosRoute
   AuthenticatedUbicacionesRoute: typeof AuthenticatedUbicacionesRoute
   AuthenticatedZonasRoute: typeof AuthenticatedZonasRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
@@ -147,6 +177,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedOrdenesServicioRoute: AuthenticatedOrdenesServicioRoute,
+  AuthenticatedTarifariosRoute: AuthenticatedTarifariosRoute,
   AuthenticatedUbicacionesRoute: AuthenticatedUbicacionesRoute,
   AuthenticatedZonasRoute: AuthenticatedZonasRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,

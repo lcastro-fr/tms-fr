@@ -235,6 +235,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tarifarios/opciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Todo lo que el formulario de tarifario necesita para poblar sus selects */
+        get: operations["opcionesTarifario"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tarifarios/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista los tarifarios activos con la cantidad de tarifas de cada uno */
+        get: operations["listarTarifarios"];
+        put?: never;
+        /** Crea un tarifario con sus tarifas de flete y de concepto adicional */
+        post: operations["crearTarifario"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tarifarios/{tarifario_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obtiene un tarifario con sus dos colecciones de tarifas */
+        get: operations["obtenerTarifario"];
+        /**
+         * Reemplaza un tarifario y sus tarifas
+         * @description Un tarifario ya usado para costear una orden de servicio responde 409: la salida es cerrar su vigencia y crear uno nuevo.
+         */
+        put: operations["actualizarTarifario"];
+        post?: never;
+        /** Da de baja lógica un tarifario y sus tarifas */
+        delete: operations["eliminarTarifario"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tarifarios/{tarifario_id}/cerrar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cierra la vigencia de un tarifario */
+        post: operations["cerrarTarifario"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -266,7 +340,7 @@ export interface components {
          * PermisoCodigo
          * @enum {string}
          */
-        PermisoCodigo: "zonas.ver" | "zonas.crear" | "zonas.editar" | "zonas.eliminar" | "ubicaciones.ver" | "ubicaciones.editar" | "ordenes_servicio.ver" | "ordenes_servicio.editar" | "ordenes_servicio.calcular_costo";
+        PermisoCodigo: "zonas.ver" | "zonas.crear" | "zonas.editar" | "zonas.eliminar" | "ubicaciones.ver" | "ubicaciones.editar" | "ordenes_servicio.ver" | "ordenes_servicio.editar" | "ordenes_servicio.calcular_costo" | "tarifarios.ver" | "tarifarios.crear" | "tarifarios.editar" | "tarifarios.eliminar";
         /** SesionOut */
         SesionOut: {
             /** Id */
@@ -687,6 +761,229 @@ export interface components {
             nombre: string;
             tipo: components["schemas"]["TipoUbicacion"];
             coordinates: components["schemas"]["GeoJSONPoint"];
+        };
+        /** ConceptoAdicionalOut */
+        ConceptoAdicionalOut: {
+            /** Id */
+            id: number;
+            /** Codigo */
+            codigo: string;
+            /** Nombre */
+            nombre: string;
+            /** Unidad */
+            unidad: string;
+            /** Tipo Operacion */
+            tipo_operacion: string | null;
+        };
+        /**
+         * TarifarioOpcionesOut
+         * @description Todo lo que el formulario necesita para poblar sus <Select>, en un solo request.
+         *
+         *     Zonas y ubicaciones viajan acá y no desde /zonas/ y /ubicaciones/ para que editar un
+         *     tarifario no exija además zonas.ver y ubicaciones.ver.
+         */
+        TarifarioOpcionesOut: {
+            /** Modalidades */
+            modalidades: components["schemas"]["OpcionOut"][];
+            /** Tipos Camion */
+            tipos_camion: components["schemas"]["OpcionOut"][];
+            /** Transportistas */
+            transportistas: components["schemas"]["TransportistaOpcionOut"][];
+            /** Conceptos */
+            conceptos: components["schemas"]["ConceptoAdicionalOut"][];
+            /** Zonas */
+            zonas: components["schemas"]["ZonaOpcionOut"][];
+            /** Ubicaciones */
+            ubicaciones: components["schemas"]["UbicacionOpcionOut"][];
+        };
+        /** TransportistaOpcionOut */
+        TransportistaOpcionOut: {
+            /** Id */
+            id: number;
+            /** Cuit */
+            cuit: string;
+            /** Razon Social */
+            razon_social: string;
+        };
+        /** UbicacionOpcionOut */
+        UbicacionOpcionOut: {
+            /** Id */
+            id: number;
+            /** Codigo */
+            codigo: string | null;
+            /** Nombre */
+            nombre: string;
+        };
+        /** ZonaOpcionOut */
+        ZonaOpcionOut: {
+            /** Id */
+            id: number;
+            /** Nombre */
+            nombre: string;
+        };
+        /** TarifariosFilters */
+        TarifariosFilters: {
+            /** Transportista Id */
+            transportista_id?: number | null;
+            /** Vencidos */
+            vencidos?: boolean | null;
+        };
+        /** TarifarioOut */
+        TarifarioOut: {
+            /** Id */
+            id: number;
+            /** Transportista Id */
+            transportista_id: number;
+            /** Transportista Razon Social */
+            transportista_razon_social: string;
+            /**
+             * Vigente Desde
+             * Format: date-time
+             */
+            vigente_desde: string;
+            /** Vigente Hasta */
+            vigente_hasta: string | null;
+            /** Cantidad Fletes */
+            cantidad_fletes: number;
+            /** Cantidad Conceptos */
+            cantidad_conceptos: number;
+            /** En Uso */
+            en_uso: boolean;
+            /** Active */
+            active: boolean;
+        };
+        /** TarifaConceptoOut */
+        TarifaConceptoOut: {
+            /** Id */
+            id: number;
+            /** Concepto Id */
+            concepto_id: number;
+            /** Concepto Codigo */
+            concepto_codigo: string;
+            /** Concepto Nombre */
+            concepto_nombre: string;
+            /** Concepto Unidad */
+            concepto_unidad: string;
+            /** Precio */
+            precio: string;
+        };
+        /** TarifaFleteOut */
+        TarifaFleteOut: {
+            /** Id */
+            id: number;
+            /** Zona Id */
+            zona_id: number | null;
+            /** Zona Nombre */
+            zona_nombre: string | null;
+            /** Ubicacion Id */
+            ubicacion_id: number | null;
+            /** Ubicacion Codigo */
+            ubicacion_codigo: string | null;
+            /** Ubicacion Nombre */
+            ubicacion_nombre: string | null;
+            /** Modalidad */
+            modalidad: string;
+            /** Tipo Camion */
+            tipo_camion: string;
+            /** Hombreador */
+            hombreador: boolean;
+            /** Precio */
+            precio: string;
+        };
+        /**
+         * TarifarioDetalleOut
+         * @description El tarifario con sus dos colecciones de tarifas: es lo que carga el formulario.
+         */
+        TarifarioDetalleOut: {
+            /** Id */
+            id: number;
+            /** Transportista Id */
+            transportista_id: number;
+            /** Transportista Razon Social */
+            transportista_razon_social: string;
+            /**
+             * Vigente Desde
+             * Format: date-time
+             */
+            vigente_desde: string;
+            /** Vigente Hasta */
+            vigente_hasta: string | null;
+            /** Cantidad Fletes */
+            cantidad_fletes: number;
+            /** Cantidad Conceptos */
+            cantidad_conceptos: number;
+            /** En Uso */
+            en_uso: boolean;
+            /** Active */
+            active: boolean;
+            /**
+             * Tarifas Flete
+             * @default []
+             */
+            tarifas_flete: components["schemas"]["TarifaFleteOut"][];
+            /**
+             * Tarifas Concepto
+             * @default []
+             */
+            tarifas_concepto: components["schemas"]["TarifaConceptoOut"][];
+        };
+        /**
+         * ModalidadFlete
+         * @enum {string}
+         */
+        ModalidadFlete: "directo" | "multiparada";
+        /** TarifaConceptoIn */
+        TarifaConceptoIn: {
+            /** Concepto Id */
+            concepto_id: number;
+            /** Precio */
+            precio: number | string;
+        };
+        /** TarifaFleteIn */
+        TarifaFleteIn: {
+            /** Zona Id */
+            zona_id?: number | null;
+            /** Ubicacion Id */
+            ubicacion_id?: number | null;
+            modalidad: components["schemas"]["ModalidadFlete"];
+            tipo_camion: components["schemas"]["TipoCamion"];
+            /**
+             * Hombreador
+             * @default false
+             */
+            hombreador: boolean;
+            /** Precio */
+            precio: number | string;
+        };
+        /** TarifarioIn */
+        TarifarioIn: {
+            /** Transportista Id */
+            transportista_id: number;
+            /**
+             * Vigente Desde
+             * Format: date-time
+             */
+            vigente_desde: string;
+            /** Vigente Hasta */
+            vigente_hasta?: string | null;
+            /**
+             * Tarifas Flete
+             * @default []
+             */
+            tarifas_flete: components["schemas"]["TarifaFleteIn"][];
+            /**
+             * Tarifas Concepto
+             * @default []
+             */
+            tarifas_concepto: components["schemas"]["TarifaConceptoIn"][];
+        };
+        /** CerrarTarifarioIn */
+        CerrarTarifarioIn: {
+            /**
+             * Vigente Hasta
+             * Format: date-time
+             */
+            vigente_hasta: string;
         };
     };
     responses: never;
@@ -2085,6 +2382,608 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UbicacionOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    opcionesTarifario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TarifarioOpcionesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listarTarifarios: {
+        parameters: {
+            query?: {
+                transportista_id?: number | null;
+                vencidos?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TarifarioOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    crearTarifario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TarifarioIn"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TarifarioDetalleOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    obtenerTarifario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tarifario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TarifarioDetalleOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    actualizarTarifario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tarifario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TarifarioIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TarifarioDetalleOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    eliminarTarifario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tarifario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    cerrarTarifario: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tarifario_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CerrarTarifarioIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TarifarioOut"];
                 };
             };
             /** @description Bad Request */

@@ -37,7 +37,7 @@ hacia arriba.
 | App | Modelos | API | Notas |
 |---|---|---|---|
 | `catalog` | `Pais`, `Ubicacion`, `Zona` | zonas (CRUD) | Datos maestros y geo. Todos dependen de acá. |
-| `transportista` | `Transportista`, `Tarifario`, `TarifaFlete`, `ConceptoAdicional`, `TarifaConceptoAdicional` | — | Tarifarios con vigencia. Sin `use_cases/`. |
+| `transportista` | `Transportista`, `Tarifario`, `TarifaFlete`, `ConceptoAdicional`, `TarifaConceptoAdicional` | tarifarios (CRUD) | Tarifarios con vigencia. El alta de transportistas y de conceptos sigue siendo sólo por admin. |
 | `logistica` | `OrdenServicio`, `CostoOrdenServicio` | órdenes de servicio (lectura y edición) | El use case del costo vive en `tracking`, no acá. |
 | `tracking` | `Ticket`, `Remito`, `RemitoDestino` | ingesta, costo de OS | La punta de entrada. |
 | `users` | `User` (login por email, `username = None`), `Permiso`, `Rol`, `UsuarioRol`, `RolPermiso` | auth (login/logout/me/csrf) | `AUTH_USER_MODEL` y el RBAC. La gestión de roles es sólo por admin. |
@@ -105,7 +105,7 @@ saberlo antes de buscarlo en `logistica/`.
 
 ## La API hoy
 
-Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **diecisiete operaciones**:
+Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **veinticuatro operaciones**:
 
 | Método | Path | Auth | Entrada | Salida |
 |---|---|---|---|---|
@@ -126,6 +126,13 @@ Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **diecisiete
 | DELETE | `/api/v1/zonas/{id}` | `zonas.eliminar` | — | 204 |
 | GET | `/api/v1/ubicaciones/` | `ubicaciones.ver` | `Query[UbicacionesFilters]` | 200 `list[UbicacionOut]` |
 | PUT | `/api/v1/ubicaciones/{id}` | `ubicaciones.editar` | `UbicacionIn` | 200 `UbicacionOut` |
+| GET | `/api/v1/tarifarios/opciones` | `tarifarios.ver` | — | 200 `TarifarioOpcionesOut` |
+| GET | `/api/v1/tarifarios/` | `tarifarios.ver` | `Query[TarifariosFilters]` | 200 `list[TarifarioOut]` |
+| POST | `/api/v1/tarifarios/` | `tarifarios.crear` | `TarifarioIn` | 201 `TarifarioDetalleOut` |
+| GET | `/api/v1/tarifarios/{id}` | `tarifarios.ver` | — | 200 `TarifarioDetalleOut` |
+| PUT | `/api/v1/tarifarios/{id}` | `tarifarios.editar` | `TarifarioIn` | 200 `TarifarioDetalleOut` |
+| POST | `/api/v1/tarifarios/{id}/cerrar` | `tarifarios.editar` | `CerrarTarifarioIn` | 200 `TarifarioOut` |
+| DELETE | `/api/v1/tarifarios/{id}` | `tarifarios.eliminar` | — | 204 |
 
 Todas declaran `**ERRORS` (400/401/403/404/409/422/500 → `ErrorOut`). **Todo lo de dominio es
 browser-only**: la `X-API-Key` quedó **exclusivamente para la ingesta**. El costo de OS la
@@ -244,6 +251,55 @@ barra redirige 301 y un POST sin barra falla. Los paths con id **no la llevan**.
 con tarifas activas responde 409 `conflict` con `detail.tarifas_flete`: sin ese catch del
 `ProtectedError` en `ZonaService.delete_zona` la operación termina en 500, porque un
 `ProtectedError` no es un `DomainError`.
+
+### El tarifario se guarda entero, en un solo request
+
+`TarifarioIn` trae la vigencia **y** sus dos colecciones de hijos, y el POST y el PUT las
+escriben en una transacción. No hay endpoints por tarifa: una tarifa suelta no significa
+nada sin su tarifario, y editar el tarifario fila por fila obligaría al formulario a
+orquestar N requests y a decidir qué hacer si el tercero falla.
+
+`replace_hijos` **da de baja las filas vigentes y crea las nuevas** en vez de diffear por
+id. Es seguro porque las tres uniques (`uq_tarifa_flete_zona`, `uq_tarifa_flete_ubicacion`,
+`uq_tarifa_concepto`) son parciales sobre `active=True`, así que recrear una clave recién
+dada de baja no choca — el mismo mecanismo del que depende `replace_costo`.
+
+**Un tarifario usado para costear no se edita ni se da de baja: 409.**
+`CostoOrdenServicio` referencia `TarifaFlete` y `TarifaConceptoAdicional` con `PROTECT` y
+además **congela los precios**, así que pisar una tarifa dejaría el costo apuntando a una
+fila que ya no dice lo que se facturó. La salida es `POST /{id}/cerrar` —que **sí** se
+permite estando en uso, es justamente el escape— y cargar un tarifario nuevo.
+
+**El chequeo de "en uso" no importa `logistica`.** `TarifarioService.tarifarios_en_uso`
+consulta `costos__active=True`, el accesor inverso que `CostoOrdenServicio.tarifa_flete`
+registra con `related_name`. La relación la declara `logistica`, pero se navega desde
+`transportista` sin un import, que es lo que la deja del lado correcto de la dirección de
+dependencias. Dos queries para toda la lista, no una por fila.
+
+**Las validaciones están repartidas y no es casualidad.** El XOR zona/ubicación va en un
+`model_validator` de `TarifaFleteIn` para que sea 422 `payload_invalid` con el `loc` de la
+fila, en vez de morir en `ck_tarifa_flete_zona_xor_ubicacion` como un `IntegrityError`
+(500). Los duplicados dentro del payload y las FKs inexistentes los chequea el service en
+Python **antes** de escribir, por lo mismo: un id inventado tiene que ser 422 y no el error
+de la FK.
+
+`GET /tarifarios/opciones` trae modalidades, tipos de camión, transportistas, conceptos,
+zonas y ubicaciones en un solo request. Zonas y ubicaciones viajan **acá** y no desde sus
+propios endpoints por dos razones: el formulario las necesita juntas (igual que
+`/ordenes-servicio/opciones`), y así editar un tarifario no exige además `zonas.ver` y
+`ubicaciones.ver`. Van finas —`.only()`, sin geometría ni dirección— así que las ~1785
+ubicaciones pesan ~120 KB contra los ~350 KB de `GET /ubicaciones/`.
+
+**`TarifariosFilters.vencidos` filtra por vencimiento, no por vigencia.** Un tarifario
+cargado con fecha futura todavía no rige, pero tampoco es historia: con un filtro de
+"vigentes ahora", darlo de alta lo haría desaparecer de la pantalla en el mismo momento de
+guardarlo. Es tri-estado de verdad — `false` es "sólo los que siguen en pie", no "sin
+filtro".
+
+`TarifarioService.get_hijos` lleva un `order_by` explícito y no alcanza con
+`TarifaFlete.Meta.ordering`: dos filas pueden compartir modalidad y tipo de camión, y sin
+desempate el formulario reordena sus filas entre requests. Es el mismo cuidado que
+`RemitoService.list_by_orden_servicio`.
 
 Docs en `/api/v1/docs`; el schema en `/api/v1/openapi.json` se importa directo en Postman
 y es la fuente de los tipos del frontend.
@@ -544,8 +600,10 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
   más; hasta que se complete la lista, cualquier destino extranjero de SAP cae en
   `destinos_sin_pais` y su OS no se puede costear.
 - **Los tests son los de auth/RBAC (`conftest.py` + `users/tests/`), los de catalog, los de
-  `logistica/tests/` (resolución de destinos por vía, costeo y la API de órdenes de servicio) y
-  los de la geolocalización de la ingesta** (`tracking/tests/`, con un `Geocoder` falso inyectado
+  `logistica/tests/` (resolución de destinos por vía, costeo y la API de órdenes de servicio),
+  los de `transportista/tests/` (la API de tarifarios: alta con hijos, XOR, duplicados,
+  solapamiento, el bloqueo por "en uso" y el filtro de vencidos) y los de la geolocalización de
+  la ingesta** (`tracking/tests/`, con un `Geocoder` falso inyectado
   para no tocar la red — es para eso que el use case recibe el geocoder por constructor).
   `shared/models.py` sigue siendo el código más delicado del repo y sigue sin cobertura propia.
   Los tests van en un directorio `tests/`, no en un `test_*.py` suelto: el per-file-ignore de
@@ -558,10 +616,13 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
   rechazar remitos válidos. Confirmar el alcance real con SAP.
 - `OrdenServicio` sólo tiene dos FKs y algunos flags: sin número, sin estado, sin fechas
   planificadas. El paso 3 necesita al menos estado y fechas.
-- **No hay API de lectura propia** de tickets, remitos ni transportistas — sólo el admin. Los
-  tickets y remitos se leen **colgados de su OS** (`OrdenServicioDetalleOut`), que alcanza para
+- **No hay API de lectura propia** de tickets ni de remitos — sólo el admin. Se leen
+  **colgados de su OS** (`OrdenServicioDetalleOut`), que alcanza para
   la pantalla pero no para buscarlos por sí solos. Ubicaciones y órdenes de servicio tienen
   lista y PUT, pero no alta ni baja (a propósito: nacen de SAP).
+- **Transportistas y conceptos adicionales son de sólo lectura por API.** Salen embebidos en
+  `GET /tarifarios/opciones` para poblar el formulario, pero su alta, edición y baja siguen
+  siendo del admin. Cargar un transportista nuevo es, hoy, un paso previo manual al tarifario.
 - **La búsqueda por `numero` no dice cuál de los dos matcheó.** Si el texto coincide con un
   remito y no con el ticket, la fila igual aparece y en la columna Ticket se ve otro número.
   Devolver el motivo del match pediría cambiar el DTO de la lista.

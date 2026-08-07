@@ -7,16 +7,12 @@ from pydantic import AwareDatetime, BaseModel
 
 from catalog.enums import TipoCamion
 from logistica.dtos.costo_dtos import CostoOrdenServicioOut
+from shared.dtos import OpcionOut
 from transportista.enums import TipoOperacion, Via
 
 if TYPE_CHECKING:
     from logistica.models import CostoOrdenServicio, OrdenServicio
     from tracking.models import Remito, RemitoDestino, Ticket
-
-
-class OpcionOut(BaseModel):
-    value: str
-    label: str
 
 
 class OrdenServicioOpcionesOut(BaseModel):
@@ -31,13 +27,10 @@ class OrdenServicioOpcionesOut(BaseModel):
         tipos_camion: list[tuple[str, str]],
         vias: list[tuple[str, str]],
     ) -> OrdenServicioOpcionesOut:
-        def opciones(choices: list[tuple[str, str]]) -> list[OpcionOut]:
-            return [OpcionOut(value=value, label=label) for value, label in choices]
-
         return cls(
-            tipos_operacion=opciones(tipos_operacion),
-            tipos_camion=opciones(tipos_camion),
-            vias=opciones(vias),
+            tipos_operacion=OpcionOut.desde_choices(tipos_operacion),
+            tipos_camion=OpcionOut.desde_choices(tipos_camion),
+            vias=OpcionOut.desde_choices(vias),
         )
 
 

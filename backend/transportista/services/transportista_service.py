@@ -7,6 +7,10 @@ class TransportistaService:
     model = Transportista
 
     @staticmethod
+    def list_transportistas() -> list[Transportista]:
+        return list(Transportista.objects.order_by("razon_social"))
+
+    @staticmethod
     def create_transportista(cuit: str, razon_social: str) -> Transportista:
         return Transportista.objects.create(cuit=cuit, razon_social=razon_social)
 

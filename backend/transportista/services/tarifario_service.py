@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
+from django.db.models.deletion import ProtectedError
+from django.utils import timezone
 
-from catalog.models import Ubicacion
+from catalog.models import Ubicacion, Zona
 from catalog.services import ZonaService
 from shared.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from transportista.enums import ConceptoUnidadMedida, ModalidadFlete
 from transportista.models import (
+    ConceptoAdicional,
     TarifaConceptoAdicional,
     TarifaFlete,
     Tarifario,
@@ -46,6 +50,18 @@ class TarifarioService:
         pass
 
     class UnidadConceptoInvalidaError(BusinessRuleError):
+        pass
+
+    class TarifarioEnUsoError(ConflictError):
+        pass
+
+    class TarifaDuplicadaError(ConflictError):
+        pass
+
+    class AlcanceTarifaInvalidoError(BusinessRuleError):
+        pass
+
+    class ReferenciaInvalidaError(BusinessRuleError):
         pass
 
     @staticmethod
@@ -138,6 +154,236 @@ class TarifarioService:
             tarifario.vigente_hasta = vigente_hasta
             tarifario.save(update_fields=["vigente_hasta", "updated_at"])
             return tarifario
+
+    @staticmethod
+    def update_tarifario(
+        tarifario: Tarifario,
+        transportista_id: int,
+        vigente_desde: datetime,
+        vigente_hasta: datetime | None,
+    ) -> Tarifario:
+        TarifarioService._check_vigencia(vigente_desde, vigente_hasta)
+
+        with transaction.atomic():
+            TarifarioService._lock_transportista(transportista_id)
+            TarifarioService._check_solapamiento(
+                transportista_id, vigente_desde, vigente_hasta, excluir_id=tarifario.id
+            )
+            tarifario.transportista_id = transportista_id
+            tarifario.vigente_desde = vigente_desde
+            tarifario.vigente_hasta = vigente_hasta
+            tarifario.save(
+                update_fields=["transportista", "vigente_desde", "vigente_hasta", "updated_at"]
+            )
+            return tarifario
+
+    @staticmethod
+    def delete_tarifario(tarifario: Tarifario) -> None:
+        try:
+            with transaction.atomic():
+                tarifario.delete()
+        except ProtectedError as exc:
+            raise TarifarioService.TarifarioEnUsoError(
+                "El tarifario tiene tarifas usadas para costear una orden de servicio",
+                detail={"tarifario_id": tarifario.id, "costos": len(exc.protected_objects)},
+            ) from exc
+
+    @staticmethod
+    def list_tarifarios(
+        transportista_id: int | None = None, vencidos: bool | None = None
+    ) -> list[Tarifario]:
+        """
+        El filtro es por vencimiento y no por vigencia a propósito: un tarifario cargado
+        con fecha futura todavía no rige, pero tampoco es historia, y esconderlo haría
+        desaparecer de la pantalla el que el usuario acaba de dar de alta.
+        """
+        qs = Tarifario.objects.select_related("transportista")
+        if transportista_id is not None:
+            qs = qs.filter(transportista_id=transportista_id)
+        if vencidos is not None:
+            vencido = Q(vigente_hasta__isnull=False) & Q(vigente_hasta__lt=timezone.now())
+            qs = qs.filter(vencido) if vencidos else qs.exclude(vencido)
+        return list(qs.order_by("transportista__razon_social", "-vigente_desde"))
+
+    @staticmethod
+    def get_tarifario(tarifario_id: int) -> Tarifario | None:
+        return Tarifario.objects.select_related("transportista").filter(pk=tarifario_id).first()
+
+    @staticmethod
+    def get_tarifario_or_raise(tarifario_id: int) -> Tarifario:
+        tarifario = TarifarioService.get_tarifario(tarifario_id)
+        if tarifario is None:
+            raise TarifarioService.TarifarioNotFoundError(
+                f"No existe el tarifario {tarifario_id}",
+                detail={"tarifario_id": tarifario_id},
+            )
+        return tarifario
+
+    @staticmethod
+    def get_hijos(
+        tarifario_id: int,
+    ) -> tuple[list[TarifaFlete], list[TarifaConceptoAdicional]]:
+        fletes = (
+            TarifaFlete.objects.filter(tarifario_id=tarifario_id)
+            .select_related("zona", "ubicacion")
+            .order_by(
+                "modalidad", "tipo_camion", "hombreador", "zona__nombre", "ubicacion__nombre", "id"
+            )
+        )
+        conceptos = (
+            TarifaConceptoAdicional.objects.filter(tarifario_id=tarifario_id)
+            .select_related("concepto")
+            .order_by("concepto__codigo")
+        )
+        return list(fletes), list(conceptos)
+
+    @staticmethod
+    def tarifarios_en_uso(tarifario_ids: list[int]) -> set[int]:
+        """
+        Los que tienen al menos una tarifa referenciada por un costo vigente.
+        """
+        if not tarifario_ids:
+            return set()
+
+        fletes = TarifaFlete.all_objects.filter(
+            tarifario_id__in=tarifario_ids, costos__active=True
+        ).values_list("tarifario_id", flat=True)
+        conceptos = TarifaConceptoAdicional.all_objects.filter(
+            tarifario_id__in=tarifario_ids, costos__active=True
+        ).values_list("tarifario_id", flat=True)
+        return set(fletes) | set(conceptos)
+
+    @staticmethod
+    def esta_en_uso(tarifario_id: int) -> bool:
+        return tarifario_id in TarifarioService.tarifarios_en_uso([tarifario_id])
+
+    @staticmethod
+    def contar_tarifas(tarifario_ids: list[int]) -> dict[int, tuple[int, int]]:
+        """Por tarifario, (tarifas de flete, tarifas de concepto) vigentes."""
+        if not tarifario_ids:
+            return {}
+
+        fletes = Counter(
+            TarifaFlete.objects.filter(tarifario_id__in=tarifario_ids).values_list(
+                "tarifario_id", flat=True
+            )
+        )
+        conceptos = Counter(
+            TarifaConceptoAdicional.objects.filter(tarifario_id__in=tarifario_ids).values_list(
+                "tarifario_id", flat=True
+            )
+        )
+        return {tid: (fletes[tid], conceptos[tid]) for tid in tarifario_ids}
+
+    @staticmethod
+    def _check_alcance(fletes: list[dict]) -> None:
+        for indice, fila in enumerate(fletes):
+            if bool(fila.get("zona_id")) == bool(fila.get("ubicacion_id")):
+                raise TarifarioService.AlcanceTarifaInvalidoError(
+                    f"La tarifa de flete #{indice + 1} tiene que apuntar a una zona o a una "
+                    f"ubicación, nunca a las dos ni a ninguna",
+                    detail={"indice": indice},
+                )
+
+    @staticmethod
+    def _check_duplicados(fletes: list[dict], conceptos: list[dict]) -> None:
+        vistas: set[tuple] = set()
+        for indice, fila in enumerate(fletes):
+            clave = (
+                fila.get("zona_id"),
+                fila.get("ubicacion_id"),
+                fila["modalidad"],
+                fila["tipo_camion"],
+                fila["hombreador"],
+            )
+            if clave in vistas:
+                raise TarifarioService.TarifaDuplicadaError(
+                    f"La tarifa de flete #{indice + 1} repite una clave ya cargada "
+                    f"(alcance, modalidad, tipo de camión y hombreador)",
+                    detail={"coleccion": "tarifas_flete", "indice": indice},
+                )
+            vistas.add(clave)
+
+        conceptos_vistos: set[int] = set()
+        for indice, fila in enumerate(conceptos):
+            if fila["concepto_id"] in conceptos_vistos:
+                raise TarifarioService.TarifaDuplicadaError(
+                    f"El concepto de la fila #{indice + 1} está cargado más de una vez",
+                    detail={"coleccion": "tarifas_concepto", "indice": indice},
+                )
+            conceptos_vistos.add(fila["concepto_id"])
+
+    @staticmethod
+    def _check_existen(campo: str, pedidos: set[int], existentes: set[int]) -> None:
+        faltantes = sorted(pedidos - existentes)
+        if faltantes:
+            raise TarifarioService.ReferenciaInvalidaError(
+                f"No existen estos {campo}: {faltantes}",
+                detail={"campo": campo, "ids": faltantes},
+            )
+
+    @staticmethod
+    def _check_referencias(fletes: list[dict], conceptos: list[dict]) -> None:
+        """
+        Un id inexistente tiene que ser 422 y no el IntegrityError de la FK, que sería 500.
+        """
+        zonas = {f["zona_id"] for f in fletes if f.get("zona_id")}
+        if zonas:
+            TarifarioService._check_existen(
+                "zona_id",
+                zonas,
+                set(Zona.objects.filter(pk__in=zonas).values_list("pk", flat=True)),
+            )
+
+        ubicaciones = {f["ubicacion_id"] for f in fletes if f.get("ubicacion_id")}
+        if ubicaciones:
+            TarifarioService._check_existen(
+                "ubicacion_id",
+                ubicaciones,
+                set(Ubicacion.objects.filter(pk__in=ubicaciones).values_list("pk", flat=True)),
+            )
+
+        conceptos_ids = {c["concepto_id"] for c in conceptos}
+        if conceptos_ids:
+            TarifarioService._check_existen(
+                "concepto_id",
+                conceptos_ids,
+                set(
+                    ConceptoAdicional.objects.filter(pk__in=conceptos_ids).values_list(
+                        "pk", flat=True
+                    )
+                ),
+            )
+
+    @staticmethod
+    def replace_hijos(tarifario: Tarifario, fletes: list[dict], conceptos: list[dict]) -> None:
+        """
+        Deja el tarifario exactamente con las filas que llegan.
+        """
+        TarifarioService._check_alcance(fletes)
+        TarifarioService._check_duplicados(fletes, conceptos)
+        TarifarioService._check_referencias(fletes, conceptos)
+
+        try:
+            with transaction.atomic():
+                TarifaFlete.objects.filter(tarifario=tarifario).delete()
+                TarifaConceptoAdicional.objects.filter(tarifario=tarifario).delete()
+                TarifaFlete.objects.bulk_create(
+                    [TarifaFlete(tarifario=tarifario, **fila) for fila in fletes]
+                )
+                TarifaConceptoAdicional.objects.bulk_create(
+                    [TarifaConceptoAdicional(tarifario=tarifario, **fila) for fila in conceptos]
+                )
+        except ProtectedError as exc:
+            raise TarifarioService.TarifarioEnUsoError(
+                "El tarifario tiene tarifas usadas para costear una orden de servicio",
+                detail={"tarifario_id": tarifario.id, "costos": len(exc.protected_objects)},
+            ) from exc
+        except IntegrityError as exc:
+            raise TarifarioService.TarifaDuplicadaError(
+                "Hay tarifas repetidas en el tarifario",
+                detail={"tarifario_id": tarifario.id},
+            ) from exc
 
     @staticmethod
     def get_tarifario_at(transportista_id: int, momento: datetime) -> Tarifario:

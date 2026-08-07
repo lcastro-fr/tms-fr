@@ -94,6 +94,27 @@ export function toApiError(error: unknown): ApiError {
 
 type PydanticError = { loc: (string | number)[]; msg: string };
 
+const PREFIJOS_LOC = ["body", "payload", "query", "path"];
+
+/**
+ * loc llega como ["body", "payload", "nombre"] o, dentro de una lista,
+ * ["body", "payload", "tarifas_flete", 0, "precio"]. Se descarta el prefijo del transporte
+ * y el resto se une con puntos, que es la ruta que form.setErrors() de Mantine entiende
+ * para los items de una lista. Quedarse con el último segmento haría que dos filas
+ * distintas escriban sobre el mismo campo.
+ */
+function rutaDeCampo(loc: (string | number)[] | undefined): string | null {
+    if (!loc?.length) {
+        return null;
+    }
+    let desde = 0;
+    while (desde < loc.length && PREFIJOS_LOC.includes(String(loc[desde]))) {
+        desde += 1;
+    }
+    const segmentos = loc.slice(desde);
+    return segmentos.length > 0 ? segmentos.join(".") : null;
+}
+
 /** Sólo para payload_invalid: business_rule comparte el 422 pero no son errores de campo. */
 export function fieldErrors(error: ApiError): Record<string, string> {
     if (error.code !== "payload_invalid") {
@@ -107,9 +128,8 @@ export function fieldErrors(error: ApiError): Record<string, string> {
 
     const result: Record<string, string> = {};
     for (const item of errors as PydanticError[]) {
-        // loc llega como ["body", "payload", "nombre"]: el campo es lo último.
-        const field = item.loc?.at(-1);
-        if (typeof field === "string" && !(field in result)) {
+        const field = rutaDeCampo(item.loc);
+        if (field !== null && !(field in result)) {
             result[field] = item.msg;
         }
     }
