@@ -166,7 +166,7 @@ export function UbicacionFormModal({ ubicacion, onClose }: Props) {
                         />
                     </Group>
 
-                    <Fieldset legend="Dirección de referencia" variant="filled">
+                    <Fieldset legend="Dirección de referencia">
                         <Stack gap="xs">
                             <TextInput
                                 label="Calle"
