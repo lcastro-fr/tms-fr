@@ -1,4 +1,13 @@
-import { AppShell, Burger, Group, Menu, NavLink, Text, Title, UnstyledButton } from "@mantine/core";
+import {
+    AppShell,
+    Burger,
+    Group,
+    Menu,
+    NavLink,
+    Text,
+    Title,
+    UnstyledButton,
+} from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -48,14 +57,23 @@ function AuthenticatedLayout() {
     return (
         <AppShell
             header={{ height: 56 }}
-            navbar={{ width: 220, breakpoint: "sm", collapsed: { mobile: !abierto } }}
+            navbar={{
+                width: 220,
+                breakpoint: "sm",
+                collapsed: { mobile: !abierto },
+            }}
             padding="md"
         >
             <AppShell.Header>
                 <Group h="100%" px="md" justify="space-between">
                     <Group gap="sm">
-                        <Burger opened={abierto} onClick={toggle} hiddenFrom="sm" size="sm" />
-                        <Title order={4}>TMS-FR</Title>
+                        <Burger
+                            opened={abierto}
+                            onClick={toggle}
+                            hiddenFrom="sm"
+                            size="sm"
+                        />
+                        <Title order={4}>Fletes</Title>
                     </Group>
                     <Menu position="bottom-end">
                         <Menu.Target>
@@ -64,15 +82,21 @@ function AuthenticatedLayout() {
                             </UnstyledButton>
                         </Menu.Target>
                         <Menu.Dropdown>
-                            <Menu.Label>{sesion.roles.join(", ") || "Sin roles"}</Menu.Label>
-                            <Menu.Item onClick={() => void cerrarSesion()}>Cerrar sesión</Menu.Item>
+                            <Menu.Item onClick={() => void cerrarSesion()}>
+                                Cerrar sesión
+                            </Menu.Item>
                         </Menu.Dropdown>
                     </Menu>
                 </Group>
             </AppShell.Header>
 
             <AppShell.Navbar p="xs">
-                <NavLink component={Link} to="/" label="Inicio" active={pathname === "/"} />
+                <NavLink
+                    component={Link}
+                    to="/"
+                    label="Inicio"
+                    active={pathname === "/"}
+                />
                 {visibles.map((item) => (
                     <NavLink
                         key={item.to}
