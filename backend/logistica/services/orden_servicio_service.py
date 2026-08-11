@@ -41,6 +41,7 @@ class OrdenServicioService:
         tipo_camion: str | None = None,
         hombreador: bool = False,
         via: str = Via.TERRESTRE.value,
+        modalidad: str | None = None,
         facturable: bool = False,
     ) -> OrdenServicio:
         return OrdenServicio.objects.create(
@@ -51,6 +52,7 @@ class OrdenServicioService:
             tipo_camion=tipo_camion,
             hombreador=hombreador,
             via=via,
+            modalidad=modalidad,
             facturable=facturable,
         )
 
@@ -118,6 +120,7 @@ class OrdenServicioService:
         tipo_operacion: str,
         tipo_camion: str | None,
         via: str,
+        modalidad: str | None,
         hombreador: bool,
         facturable: bool,
     ) -> OrdenServicio:
@@ -125,6 +128,7 @@ class OrdenServicioService:
         orden_servicio.tipo_operacion = tipo_operacion
         orden_servicio.tipo_camion = tipo_camion
         orden_servicio.via = via
+        orden_servicio.modalidad = modalidad
         orden_servicio.hombreador = hombreador
         orden_servicio.facturable = facturable
         with transaction.atomic():
@@ -134,6 +138,7 @@ class OrdenServicioService:
                     "tipo_operacion",
                     "tipo_camion",
                     "via",
+                    "modalidad",
                     "hombreador",
                     "facturable",
                     "updated_at",

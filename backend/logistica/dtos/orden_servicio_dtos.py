@@ -9,7 +9,7 @@ from catalog.dtos import UbicacionOpcionOut
 from catalog.enums import TipoCamion
 from logistica.dtos.costo_dtos import CostoOrdenServicioOut
 from shared.dtos import OpcionOut
-from transportista.enums import TipoOperacion, Via
+from transportista.enums import ModalidadFlete, TipoOperacion, Via
 
 if TYPE_CHECKING:
     from catalog.models import Ubicacion
@@ -21,6 +21,7 @@ class OrdenServicioOpcionesOut(BaseModel):
     tipos_operacion: list[OpcionOut]
     tipos_camion: list[OpcionOut]
     vias: list[OpcionOut]
+    modalidades: list[OpcionOut]
     ubicaciones: list[UbicacionOpcionOut]
 
     @classmethod
@@ -29,12 +30,14 @@ class OrdenServicioOpcionesOut(BaseModel):
         tipos_operacion: list[tuple[str, str]],
         tipos_camion: list[tuple[str, str]],
         vias: list[tuple[str, str]],
+        modalidades: list[tuple[str, str]],
         ubicaciones: list[Ubicacion],
     ) -> OrdenServicioOpcionesOut:
         return cls(
             tipos_operacion=OpcionOut.desde_choices(tipos_operacion),
             tipos_camion=OpcionOut.desde_choices(tipos_camion),
             vias=OpcionOut.desde_choices(vias),
+            modalidades=OpcionOut.desde_choices(modalidades),
             ubicaciones=[UbicacionOpcionOut.from_model(u) for u in ubicaciones],
         )
 
@@ -48,6 +51,7 @@ class OrdenServicioIn(BaseModel):
     tipo_operacion: TipoOperacion
     tipo_camion: TipoCamion | None = None
     via: Via
+    modalidad: ModalidadFlete | None = None
     hombreador: bool = False
     facturable: bool = False
     destinos: list[OrdenServicioDestinoIn] | None = None
@@ -152,6 +156,7 @@ class OrdenServicioOut(BaseModel):
     tipo_operacion: str
     tipo_camion: str | None
     via: str
+    modalidad: str | None
     hombreador: bool
     facturable: bool
     active: bool
@@ -180,6 +185,7 @@ class OrdenServicioOut(BaseModel):
             tipo_operacion=orden.tipo_operacion,
             tipo_camion=orden.tipo_camion,
             via=orden.via,
+            modalidad=orden.modalidad,
             hombreador=orden.hombreador,
             facturable=orden.facturable,
             active=orden.active,

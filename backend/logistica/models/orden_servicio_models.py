@@ -5,7 +5,13 @@ from django.db import models
 from catalog.enums import TIPO_CAMION_CHOICES
 from catalog.models import Ubicacion
 from shared.models import BaseModel
-from transportista.enums import TIPO_OPERACION_CHOICES, VIA_CHOICES, TipoOperacion, Via
+from transportista.enums import (
+    MODALIDAD_FLETE_CHOICES,
+    TIPO_OPERACION_CHOICES,
+    VIA_CHOICES,
+    TipoOperacion,
+    Via,
+)
 from transportista.models import Transportista
 
 
@@ -23,6 +29,9 @@ class OrdenServicio(BaseModel):
         max_length=20, choices=TIPO_CAMION_CHOICES, null=True, blank=True
     )
     via = models.CharField(max_length=20, choices=VIA_CHOICES, default=Via.TERRESTRE.value)
+    modalidad = models.CharField(  # noqa: DJ001
+        max_length=20, choices=MODALIDAD_FLETE_CHOICES, null=True, blank=True
+    )
     hombreador = models.BooleanField(default=False)
     facturable = models.BooleanField(default=False)
 

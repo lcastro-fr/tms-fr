@@ -31,10 +31,8 @@ class CostoOrdenServicioService:
         if cantidad_destinos is None or orden.tipo_operacion == TipoOperacion.CAMARA.value:
             return False
 
-        return (
-            costo.cantidad_destinos != cantidad_destinos
-            or costo.modalidad != ModalidadFlete.para_destinos(cantidad_destinos).value
-        )
+        modalidad_efectiva = orden.modalidad or ModalidadFlete.para_destinos(cantidad_destinos).value
+        return costo.cantidad_destinos != cantidad_destinos or costo.modalidad != modalidad_efectiva
 
     @staticmethod
     def get_costo_vigente(orden_servicio_id: int) -> CostoOrdenServicio | None:

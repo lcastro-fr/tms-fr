@@ -550,6 +550,8 @@ export interface components {
             tipos_camion: components["schemas"]["OpcionOut"][];
             /** Vias */
             vias: components["schemas"]["OpcionOut"][];
+            /** Modalidades */
+            modalidades: components["schemas"]["OpcionOut"][];
             /** Ubicaciones */
             ubicaciones: components["schemas"]["UbicacionOpcionOut"][];
         };
@@ -609,6 +611,8 @@ export interface components {
             tipo_camion: string | null;
             /** Via */
             via: string;
+            /** Modalidad */
+            modalidad: string | null;
             /** Hombreador */
             hombreador: boolean;
             /** Facturable */
@@ -693,6 +697,8 @@ export interface components {
             tipo_camion: string | null;
             /** Via */
             via: string;
+            /** Modalidad */
+            modalidad: string | null;
             /** Hombreador */
             hombreador: boolean;
             /** Facturable */
@@ -750,6 +756,11 @@ export interface components {
             /** Destinos */
             destinos: components["schemas"]["RemitoDestinoOut"][];
         };
+        /**
+         * ModalidadFlete
+         * @enum {string}
+         */
+        ModalidadFlete: "directo" | "multiparada";
         /** OrdenServicioDestinoIn */
         OrdenServicioDestinoIn: {
             /** Ubicacion Id */
@@ -762,6 +773,7 @@ export interface components {
             tipo_operacion: components["schemas"]["TipoOperacion"];
             tipo_camion?: components["schemas"]["TipoCamion"] | null;
             via: components["schemas"]["Via"];
+            modalidad?: components["schemas"]["ModalidadFlete"] | null;
             /**
              * Hombreador
              * @default false
@@ -866,11 +878,7 @@ export interface components {
          * @enum {string}
          */
         TipoUbicacion: "planta" | "puerto" | "aeropuerto" | "cliente" | "expreso" | "otro";
-        /**
-         * UbicacionCrearIn
-         * @description No hereda de UbicacionIn a propósito: los dos contratos están hechos para no coincidir, y
-         *     heredar volvería creable cualquier campo que el PUT gane en el futuro.
-         */
+        /** UbicacionCrearIn */
         UbicacionCrearIn: {
             /** Nombre */
             nombre: string;
@@ -907,12 +915,7 @@ export interface components {
             /** Consulta */
             consulta: string;
         };
-        /**
-         * GeocodificarUbicacionIn
-         * @description Los nombres son los del formulario y de la columna, no los de GeocodeQuery: fieldErrors()
-         *     mapea el loc de pydantic al campo por nombre, y un 422 sobre `direccion` no caería en
-         *     ningún input.
-         */
+        /** GeocodificarUbicacionIn */
         GeocodificarUbicacionIn: {
             /** Calle */
             calle?: string | null;
@@ -923,12 +926,7 @@ export interface components {
             /** Pais Codigo */
             pais_codigo: string;
         };
-        /**
-         * UbicacionIn
-         * @description El PUT sólo corrige. `codigo` y la dirección no entran a propósito: el primero es la clave
-         *     con la que upsert_by_codigo reconoce las filas de SAP, y la segunda es la entrada de la
-         *     geolocalización, que el upsert vuelve a traer.
-         */
+        /** UbicacionIn */
         UbicacionIn: {
             /** Nombre */
             nombre: string;
@@ -1091,11 +1089,6 @@ export interface components {
              */
             tarifas_concepto: components["schemas"]["TarifaConceptoOut"][];
         };
-        /**
-         * ModalidadFlete
-         * @enum {string}
-         */
-        ModalidadFlete: "directo" | "multiparada";
         /** TarifaConceptoIn */
         TarifaConceptoIn: {
             /** Concepto Id */

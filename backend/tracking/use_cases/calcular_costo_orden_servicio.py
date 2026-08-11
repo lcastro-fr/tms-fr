@@ -9,7 +9,7 @@ from logistica.dtos import CostoOrdenServicioOut
 from logistica.services import CostoOrdenServicioService, OrdenServicioService
 from shared.exceptions import BusinessRuleError
 from tracking.services import RemitoService, TicketService
-from transportista.enums import TipoOperacion
+from transportista.enums import ModalidadFlete, TipoOperacion
 from transportista.services import TarifarioService
 
 logger = logging.getLogger(__name__)
@@ -60,8 +60,9 @@ class CalcularCostoOrdenServicioUseCase:
             if not destinos:
                 crudos = RemitoService.get_distinct_destinos(orden.id)
                 destinos = OrdenServicioService.resolve_destinos(orden, crudos)
+            modalidad_override = ModalidadFlete(orden.modalidad) if orden.modalidad else None
             tarifa_flete = TarifarioService.resolve_tarifa_flete(
-                tarifario, destinos, orden.tipo_camion, orden.hombreador
+                tarifario, destinos, orden.tipo_camion, orden.hombreador, modalidad_override
             )
             precio_flete = tarifa_flete.precio
             modalidad = tarifa_flete.modalidad
