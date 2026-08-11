@@ -266,7 +266,9 @@ def test_el_put_puede_mover_el_tarifario_a_otro_transportista(
 # --- tarifario en uso -------------------------------------------------------
 
 
-def test_un_tarifario_en_uso_no_se_edita(client, usuario_con, transportista, zona, costear):
+def test_un_tarifario_en_uso_no_permite_cambiar_el_precio_de_una_fila(
+    client, usuario_con, transportista, zona, costear
+):
     client.force_login(usuario_con(*TODOS))
     creado = crear(client, transportista, fletes=[flete_in(zona_id=zona.id)]).json()
     costear(tarifa_flete=TarifaFlete.objects.get(pk=creado["tarifas_flete"][0]["id"]))
@@ -278,11 +280,11 @@ def test_un_tarifario_en_uso_no_se_edita(client, usuario_con, transportista, zon
     )
 
     assert resp.status_code == 409
-    assert resp.json()["error"]["detail"]["motivo"] == "en_uso"
+    assert resp.json()["error"]["detail"]["motivo"] == "congelada"
     assert TarifaFlete.objects.get(pk=creado["tarifas_flete"][0]["id"]).precio == 185000
 
 
-def test_un_tarifario_en_uso_por_su_concepto_tampoco_se_edita(
+def test_un_tarifario_en_uso_no_permite_cambiar_el_precio_de_un_concepto(
     client, usuario_con, transportista, concepto, costear
 ):
     client.force_login(usuario_con(*TODOS))
@@ -295,12 +297,85 @@ def test_un_tarifario_en_uso_por_su_concepto_tampoco_se_edita(
 
     resp = client.put(
         f"{TARIFARIOS}{creado['id']}",
+        tarifario_in(
+            transportista, conceptos=[{"concepto_id": concepto.id, "precio": "5000.00"}]
+        ),
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["error"]["detail"]["motivo"] == "congelada"
+
+
+def test_un_tarifario_en_uso_no_permite_quitar_una_fila(
+    client, usuario_con, transportista, zona, costear
+):
+    client.force_login(usuario_con(*TODOS))
+    creado = crear(client, transportista, fletes=[flete_in(zona_id=zona.id)]).json()
+    costear(tarifa_flete=TarifaFlete.objects.get(pk=creado["tarifas_flete"][0]["id"]))
+
+    resp = client.put(
+        f"{TARIFARIOS}{creado['id']}",
         tarifario_in(transportista),
         content_type="application/json",
     )
 
     assert resp.status_code == 409
-    assert resp.json()["error"]["detail"]["motivo"] == "en_uso"
+    assert resp.json()["error"]["detail"]["motivo"] == "quitada"
+    assert TarifaFlete.objects.filter(tarifario_id=creado["id"]).count() == 1
+
+
+def test_un_tarifario_en_uso_permite_agregar_una_tarifa_de_flete(
+    client, usuario_con, transportista, zona, ubicacion, costear
+):
+    client.force_login(usuario_con(*TODOS))
+    creado = crear(client, transportista, fletes=[flete_in(zona_id=zona.id)]).json()
+    congelada = TarifaFlete.objects.get(pk=creado["tarifas_flete"][0]["id"])
+    costo = costear(tarifa_flete=congelada)
+
+    resp = client.put(
+        f"{TARIFARIOS}{creado['id']}",
+        tarifario_in(
+            transportista,
+            fletes=[
+                flete_in(zona_id=zona.id),
+                flete_in(ubicacion_id=ubicacion.id, precio="90000.00"),
+            ],
+        ),
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["en_uso"] is True
+    fletes = resp.json()["tarifas_flete"]
+    assert len(fletes) == 2
+    assert {t["zona_id"] for t in fletes} == {zona.id, None}
+    congelada.refresh_from_db()
+    assert congelada.precio == 185000
+    costo.refresh_from_db()
+    assert costo.precio_flete == 185000
+    assert costo.tarifa_flete_id == congelada.id
+
+
+def test_un_tarifario_en_uso_permite_agregar_un_concepto(
+    client, usuario_con, transportista, zona, concepto, costear
+):
+    client.force_login(usuario_con(*TODOS))
+    creado = crear(client, transportista, fletes=[flete_in(zona_id=zona.id)]).json()
+    costear(tarifa_flete=TarifaFlete.objects.get(pk=creado["tarifas_flete"][0]["id"]))
+
+    resp = client.put(
+        f"{TARIFARIOS}{creado['id']}",
+        tarifario_in(
+            transportista,
+            fletes=[flete_in(zona_id=zona.id)],
+            conceptos=[{"concepto_id": concepto.id, "precio": "1000.00"}],
+        ),
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 200
+    assert [t["concepto_id"] for t in resp.json()["tarifas_concepto"]] == [concepto.id]
 
 
 def test_un_tarifario_en_uso_no_se_da_de_baja(client, usuario_con, transportista, zona, costear):

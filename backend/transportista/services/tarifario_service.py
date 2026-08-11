@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
 from datetime import datetime
 
 from django.db import IntegrityError, transaction
@@ -53,6 +54,9 @@ class TarifarioService:
         pass
 
     class TarifarioEnUsoError(ConflictError):
+        pass
+
+    class TarifaCongeladaError(ConflictError):
         pass
 
     class TarifaDuplicadaError(ConflictError):
@@ -286,16 +290,30 @@ class TarifarioService:
                 )
 
     @staticmethod
+    def _clave_flete_dict(fila: dict) -> tuple:
+        return (
+            fila.get("zona_id"),
+            fila.get("ubicacion_id"),
+            fila["modalidad"],
+            fila["tipo_camion"],
+            fila["hombreador"],
+        )
+
+    @staticmethod
+    def _clave_flete_model(flete: TarifaFlete) -> tuple:
+        return (
+            flete.zona_id,
+            flete.ubicacion_id,
+            flete.modalidad,
+            flete.tipo_camion,
+            flete.hombreador,
+        )
+
+    @staticmethod
     def _check_duplicados(fletes: list[dict], conceptos: list[dict]) -> None:
         vistas: set[tuple] = set()
         for indice, fila in enumerate(fletes):
-            clave = (
-                fila.get("zona_id"),
-                fila.get("ubicacion_id"),
-                fila["modalidad"],
-                fila["tipo_camion"],
-                fila["hombreador"],
-            )
+            clave = TarifarioService._clave_flete_dict(fila)
             if clave in vistas:
                 raise TarifarioService.TarifaDuplicadaError(
                     f"La tarifa de flete #{indice + 1} repite una clave ya cargada "
@@ -384,6 +402,80 @@ class TarifarioService:
                 "Hay tarifas repetidas en el tarifario",
                 detail={"tarifario_id": tarifario.id},
             ) from exc
+
+    @staticmethod
+    def agregar_hijos(tarifario: Tarifario, fletes: list[dict], conceptos: list[dict]) -> None:
+        """
+        Suma filas a un tarifario en uso. Las vigentes están congeladas por un costo: no se
+        pueden modificar ni quitar, sólo se crean las de clave nueva.
+        """
+        TarifarioService._check_alcance(fletes)
+        TarifarioService._check_duplicados(fletes, conceptos)
+        TarifarioService._check_referencias(fletes, conceptos)
+
+        fletes_actuales = {
+            TarifarioService._clave_flete_model(f): f
+            for f in TarifaFlete.objects.filter(tarifario=tarifario)
+        }
+        conceptos_actuales = {
+            c.concepto_id: c
+            for c in TarifaConceptoAdicional.objects.filter(tarifario=tarifario)
+        }
+
+        nuevos_flete = TarifarioService._solo_nuevos(
+            "tarifas_flete",
+            fletes,
+            fletes_actuales,
+            TarifarioService._clave_flete_dict,
+        )
+        nuevos_concepto = TarifarioService._solo_nuevos(
+            "tarifas_concepto",
+            conceptos,
+            conceptos_actuales,
+            lambda fila: fila["concepto_id"],
+        )
+
+        with transaction.atomic():
+            TarifaFlete.objects.bulk_create(
+                [TarifaFlete(tarifario=tarifario, **fila) for fila in nuevos_flete]
+            )
+            TarifaConceptoAdicional.objects.bulk_create(
+                [TarifaConceptoAdicional(tarifario=tarifario, **fila) for fila in nuevos_concepto]
+            )
+
+    @staticmethod
+    def _solo_nuevos(
+        coleccion: str,
+        filas: list[dict],
+        actuales: dict,
+        clave_de: Callable[[dict], object],
+    ) -> list[dict]:
+        """
+        Filas de clave nueva a crear; rechaza modificar o quitar una fila congelada.
+        """
+        nuevos: list[dict] = []
+        vistas: set = set()
+        for indice, fila in enumerate(filas):
+            clave = clave_de(fila)
+            vistas.add(clave)
+            existente = actuales.get(clave)
+            if existente is None:
+                nuevos.append(fila)
+            elif existente.precio != fila["precio"]:
+                raise TarifarioService.TarifaCongeladaError(
+                    f"No se puede modificar el precio de una tarifa ya usada para costear "
+                    f"({coleccion} #{indice + 1}): cerrá la vigencia y duplicá el tarifario",
+                    detail={"coleccion": coleccion, "indice": indice, "motivo": "congelada"},
+                )
+
+        quitadas = set(actuales) - vistas
+        if quitadas:
+            raise TarifarioService.TarifaCongeladaError(
+                f"No se puede quitar una tarifa ya usada para costear ({coleccion}): "
+                f"cerrá la vigencia y duplicá el tarifario",
+                detail={"coleccion": coleccion, "motivo": "quitada"},
+            )
+        return nuevos
 
     @staticmethod
     def get_tarifario_at(transportista_id: int, momento: datetime) -> Tarifario:

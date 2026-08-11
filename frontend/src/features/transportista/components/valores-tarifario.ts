@@ -12,8 +12,10 @@ import type {
  * excluyentes en el backend, y modelarlo como una elección hace que el XOR se cumpla por
  * construcción en vez de depender del validador.
  */
+/** `congelada`: una fila ya usada para costear no se edita ni se quita, sólo se agregan nuevas. */
 export type FilaFlete = {
     key: string;
+    congelada: boolean;
     alcance: "zona" | "ubicacion";
     referencia_id: string | null;
     modalidad: ModalidadFlete;
@@ -24,6 +26,7 @@ export type FilaFlete = {
 
 export type FilaConcepto = {
     key: string;
+    congelada: boolean;
     concepto_id: string | null;
     precio: string | number;
 };
@@ -47,6 +50,7 @@ function nuevaKey(): string {
 export function filaFleteVacia(): FilaFlete {
     return {
         key: nuevaKey(),
+        congelada: false,
         alcance: "zona",
         referencia_id: null,
         modalidad: "directo",
@@ -57,10 +61,13 @@ export function filaFleteVacia(): FilaFlete {
 }
 
 export function filaConceptoVacia(): FilaConcepto {
-    return { key: nuevaKey(), concepto_id: null, precio: "" };
+    return { key: nuevaKey(), congelada: false, concepto_id: null, precio: "" };
 }
 
-export function valoresIniciales(tarifario: TarifarioDetalleOut | null): Valores {
+export function valoresIniciales(
+    tarifario: TarifarioDetalleOut | null,
+    enUso = false,
+): Valores {
     if (tarifario === null) {
         return {
             transportista_id: null,
@@ -76,6 +83,7 @@ export function valoresIniciales(tarifario: TarifarioDetalleOut | null): Valores
         vigente_hasta: aWallClock(tarifario.vigente_hasta),
         tarifas_flete: tarifario.tarifas_flete.map((tarifa) => ({
             key: nuevaKey(),
+            congelada: enUso,
             alcance: tarifa.zona_id !== null ? "zona" : "ubicacion",
             referencia_id: String(tarifa.zona_id ?? tarifa.ubicacion_id),
             modalidad: tarifa.modalidad as ModalidadFlete,
@@ -85,6 +93,7 @@ export function valoresIniciales(tarifario: TarifarioDetalleOut | null): Valores
         })),
         tarifas_concepto: tarifario.tarifas_concepto.map((tarifa) => ({
             key: nuevaKey(),
+            congelada: enUso,
             concepto_id: String(tarifa.concepto_id),
             precio: tarifa.precio,
         })),
