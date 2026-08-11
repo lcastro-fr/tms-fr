@@ -19,6 +19,7 @@ import {
     useRouterState,
 } from "@tanstack/react-router";
 
+import { ColorSchemeToggle } from "../components/ColorSchemeToggle";
 import type { PermisoCodigo } from "../features/auth";
 import { logout, meQueryOptions, usePermisos } from "../features/auth";
 
@@ -106,6 +107,9 @@ function AuthenticatedLayout() {
                         active={pathname.startsWith(item.to)}
                     />
                 ))}
+                <Group mt="auto" p="xs" justify="flex-end">
+                    <ColorSchemeToggle />
+                </Group>
             </AppShell.Navbar>
 
             <AppShell.Main>
