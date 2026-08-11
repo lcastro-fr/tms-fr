@@ -76,18 +76,21 @@ function AuthenticatedLayout() {
                         />
                         <Title order={4}>Fletes</Title>
                     </Group>
-                    <Menu position="bottom-end">
-                        <Menu.Target>
-                            <UnstyledButton>
-                                <Text size="sm">{sesion.nombre}</Text>
-                            </UnstyledButton>
-                        </Menu.Target>
-                        <Menu.Dropdown>
-                            <Menu.Item onClick={() => void cerrarSesion()}>
-                                Cerrar sesión
-                            </Menu.Item>
-                        </Menu.Dropdown>
-                    </Menu>
+                    <Group gap="sm">
+                        <ColorSchemeToggle />
+                        <Menu position="bottom-end">
+                            <Menu.Target>
+                                <UnstyledButton>
+                                    <Text size="sm">{sesion.nombre}</Text>
+                                </UnstyledButton>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                                <Menu.Item onClick={() => void cerrarSesion()}>
+                                    Cerrar sesión
+                                </Menu.Item>
+                            </Menu.Dropdown>
+                        </Menu>
+                    </Group>
                 </Group>
             </AppShell.Header>
 
@@ -107,9 +110,6 @@ function AuthenticatedLayout() {
                         active={pathname.startsWith(item.to)}
                     />
                 ))}
-                <Group mt="auto" p="xs" justify="flex-end">
-                    <ColorSchemeToggle />
-                </Group>
             </AppShell.Navbar>
 
             <AppShell.Main>
