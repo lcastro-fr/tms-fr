@@ -11,7 +11,7 @@ import { theme } from "./theme";
 export function Providers({ children }: { children: ReactNode }) {
     return (
         <QueryClientProvider client={queryClient}>
-            <MantineProvider theme={theme} defaultColorScheme="light">
+            <MantineProvider theme={theme} defaultColorScheme="auto">
                 <ModalsProvider>
                     {children}
                     <Notifications />
