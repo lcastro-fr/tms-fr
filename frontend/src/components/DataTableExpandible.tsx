@@ -12,7 +12,9 @@ import {
 import type { ReactNode } from "react";
 import { Fragment, useState } from "react";
 
+import { BuscadorTabla } from "./BuscadorTabla";
 import type { ColumnDefs } from "./DataTable";
+import { filtroGlobalTexto } from "./filtro-global";
 
 type Props<T> = {
     columns: ColumnDefs<T>;
@@ -23,6 +25,8 @@ type Props<T> = {
     puedeExpandir?: (row: T) => boolean;
     vacio?: string;
     pageSize?: number;
+    /** El placeholder de la barra de búsqueda. Sin este prop no hay barra. */
+    buscador?: string;
 };
 
 /**
@@ -38,17 +42,25 @@ export function DataTableExpandible<T>({
     puedeExpandir = () => true,
     vacio = "Sin resultados",
     pageSize = 20,
+    buscador,
 }: Props<T>) {
     const [sorting, setSorting] = useState<SortingState>([]);
     const [expanded, setExpanded] = useState<ExpandedState>({});
+    const [busqueda, setBusqueda] = useState("");
 
     const table = useReactTable({
         data,
         columns,
         getRowId,
-        state: { sorting, expanded },
+        state: { sorting, expanded, globalFilter: busqueda },
         onSortingChange: setSorting,
         onExpandedChange: setExpanded,
+        onGlobalFilterChange: setBusqueda,
+        globalFilterFn: filtroGlobalTexto,
+        // Igual que en DataTable: sin esto, una columna nullable que arranca en null queda
+        // afuera de la búsqueda para toda la tabla. El detalle de la fila no es un sub-row,
+        // así que la búsqueda es sobre los padres y nada más.
+        getColumnCanGlobalFilter: () => true,
         getRowCanExpand: (row) => puedeExpandir(row.original),
         initialState: { pagination: { pageSize } },
         getCoreRowModel: getCoreRowModel(),
@@ -61,6 +73,9 @@ export function DataTableExpandible<T>({
     const totalPaginas = table.getPageCount();
     // El colSpan tiene que cubrir las celdas más la del chevron, o la tabla se desalinea.
     const columnasTotales = table.getVisibleFlatColumns().length + 1;
+    // Pre-paginación: getPaginationRowModel no clampea el pageIndex, así que el conteo de la
+    // página es 0 por un commit cada vez que la búsqueda achica los resultados.
+    const coincidencias = table.getFilteredRowModel().rows.length;
 
     return (
         <Box
@@ -71,6 +86,21 @@ export function DataTableExpandible<T>({
                 padding: "var(--mantine-spacing-xs)",
             }}
         >
+            {buscador !== undefined && (
+                <Group justify="space-between" mb="xs" wrap="nowrap">
+                    <BuscadorTabla
+                        placeholder={buscador}
+                        valor={busqueda}
+                        onChange={setBusqueda}
+                    />
+                    {busqueda !== "" && (
+                        <Text c="dimmed" size="sm">
+                            {coincidencias} de {data.length}
+                        </Text>
+                    )}
+                </Group>
+            )}
+
             <Table striped highlightOnHover>
                 <Table.Thead>
                     {table.getHeaderGroups().map((grupo) => (
@@ -142,6 +172,12 @@ export function DataTableExpandible<T>({
             {data.length === 0 && (
                 <Text c="dimmed" size="sm" mt="sm">
                     {vacio}
+                </Text>
+            )}
+
+            {data.length > 0 && coincidencias === 0 && (
+                <Text c="dimmed" size="sm" mt="sm">
+                    Ninguna fila coincide con “{busqueda}”.
                 </Text>
             )}
 

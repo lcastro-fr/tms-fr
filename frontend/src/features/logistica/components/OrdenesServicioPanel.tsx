@@ -183,6 +183,7 @@ export function OrdenesServicioPanel({
                 expandido={(orden) => <TicketsDeOrden tickets={orden.tickets} />}
                 puedeExpandir={(orden) => orden.tickets.length > 0}
                 vacio="Ninguna orden de servicio coincide con los filtros puestos."
+                buscador="Filtrar lo cargado: OS, ticket, origen o transportista"
             />
 
             <Suspense fallback={<Loader size="sm" />}>

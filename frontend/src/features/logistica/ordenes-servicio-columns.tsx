@@ -60,6 +60,8 @@ export function ordenesServicioColumns({
         {
             accessorKey: "fecha_viaje",
             header: "Fecha de viaje",
+            // El accessor es el ISO y la celda muestra DD/MM/YYYY: buscar "11/08" no daría nada.
+            enableGlobalFilter: false,
             cell: ({ row }) =>
                 row.original.fecha_viaje ? (
                     formatearFecha(row.original.fecha_viaje)
@@ -69,10 +71,12 @@ export function ordenesServicioColumns({
                     </Text>
                 ),
         },
+        // Los tres son valores tabulados: su filtro es un Select por columna, no texto libre.
         {
             id: "tipo_operacion",
             header: "Operación",
             accessorFn: (orden) => orden.tipo_operacion,
+            enableGlobalFilter: false,
             cell: ({ row }) =>
                 etiqueta("tipos_operacion", row.original.tipo_operacion),
         },
@@ -80,12 +84,14 @@ export function ordenesServicioColumns({
             id: "via",
             header: "Vía",
             accessorFn: (orden) => orden.via,
+            enableGlobalFilter: false,
             cell: ({ row }) => etiqueta("vias", row.original.via),
         },
         {
             id: "tipo_camion",
             header: "Camión",
             accessorFn: (orden) => orden.tipo_camion ?? "",
+            enableGlobalFilter: false,
             cell: ({ row }) =>
                 row.original.tipo_camion ? (
                     etiqueta("tipos_camion", row.original.tipo_camion)
@@ -119,6 +125,9 @@ export function ordenesServicioColumns({
             header: "Costo",
             accessorFn: (orden) =>
                 orden.costo ? Number(orden.costo.total) : -1,
+            // El accessor es el número crudo con -1 de centinela: buscar "1" traería todas las
+            // OS sin costo, y "185.000" ninguna.
+            enableGlobalFilter: false,
             cell: ({ row }) =>
                 row.original.costo ? (
                     <Text size="sm" fw={500}>

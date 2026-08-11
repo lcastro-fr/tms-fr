@@ -196,7 +196,8 @@ Los de cada capa están en su documento. Estos cruzan las dos:
   contratos de catalog (`catalog/tests/`), la resolución de destinos, el costeo y la API de OS
   (`logistica/tests/`), la API de tarifarios (`transportista/tests/`) y la geolocalización de la
   ingesta (`tracking/tests/`); el frontend tiene las conversiones geo, el cableado de los dos
-  mapas, los helpers de fecha y dinero (`lib/`) y el mapeo de errores de campo (`api/`).
+  mapas, los helpers de fecha y dinero (`lib/`), el mapeo de errores de campo (`api/`) y la
+  búsqueda global de las tablas (`components/`).
   Sin cobertura: `shared/models.py` —el borrado lógico, el código más delicado del repo—, y
   **no hay MSW**, así que en el frontend no se
   pueden testear estados de carga ni error del camino real de datos.

@@ -85,6 +85,7 @@ export function UbicacionesPanel({ filters, seleccion, cargando, onFiltersChange
                         ? "No queda ninguna ubicación en ese estado."
                         : "Todavía no hay ubicaciones cargadas."
                 }
+                buscador="Código, nombre, localidad o provincia"
             />
 
             <Suspense fallback={<Loader size="sm" />}>

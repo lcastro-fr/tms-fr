@@ -14,6 +14,9 @@ import {
 } from "@tanstack/react-table";
 import { useState } from "react";
 
+import { BuscadorTabla } from "./BuscadorTabla";
+import { filtroGlobalTexto } from "./filtro-global";
+
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 export type ColumnDefs<T> = ColumnDef<T, any>[];
 
@@ -25,6 +28,7 @@ type Props<T> = {
     onRowSelectionChange?: (selection: RowSelectionState) => void;
     vacio?: string;
     pageSize?: number;
+    buscador?: string;
 };
 
 export function DataTable<T>({
@@ -35,15 +39,24 @@ export function DataTable<T>({
     onRowSelectionChange,
     vacio = "Sin resultados",
     pageSize = 20,
+    buscador,
 }: Props<T>) {
     const [sorting, setSorting] = useState<SortingState>([]);
+    const [busqueda, setBusqueda] = useState("");
 
     const table = useReactTable({
         data,
         columns,
         getRowId,
-        state: { sorting, ...(rowSelection ? { rowSelection } : {}) },
+        state: {
+            sorting,
+            globalFilter: busqueda,
+            ...(rowSelection ? { rowSelection } : {}),
+        },
         onSortingChange: setSorting,
+        onGlobalFilterChange: setBusqueda,
+        globalFilterFn: filtroGlobalTexto,
+        getColumnCanGlobalFilter: () => true,
         enableRowSelection: rowSelection !== undefined,
         onRowSelectionChange: (updater) => {
             if (!onRowSelectionChange) return;
@@ -61,6 +74,7 @@ export function DataTable<T>({
     });
 
     const totalPaginas = table.getPageCount();
+    const coincidencias = table.getFilteredRowModel().rows.length;
 
     return (
         <Box
@@ -71,6 +85,21 @@ export function DataTable<T>({
                 padding: "var(--mantine-spacing-xs)",
             }}
         >
+            {buscador !== undefined && (
+                <Group justify="space-between" mb="xs" wrap="nowrap">
+                    <BuscadorTabla
+                        placeholder={buscador}
+                        valor={busqueda}
+                        onChange={setBusqueda}
+                    />
+                    {busqueda !== "" && (
+                        <Text c="dimmed" size="sm">
+                            {coincidencias} de {data.length}
+                        </Text>
+                    )}
+                </Group>
+            )}
+
             <Table striped highlightOnHover>
                 <Table.Thead>
                     {table.getHeaderGroups().map((grupo) => (
@@ -120,6 +149,12 @@ export function DataTable<T>({
             {data.length === 0 && (
                 <Text c="dimmed" size="sm" mt="sm">
                     {vacio}
+                </Text>
+            )}
+
+            {data.length > 0 && coincidencias === 0 && (
+                <Text c="dimmed" size="sm" mt="sm">
+                    Ninguna fila coincide con “{busqueda}”.
                 </Text>
             )}
 

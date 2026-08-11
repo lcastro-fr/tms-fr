@@ -146,6 +146,7 @@ export function TarifariosPanel({ filters, seleccion, cargando, onFiltersChange 
                 data={tarifarios}
                 getRowId={(tarifario) => String(tarifario.id)}
                 vacio="Todavía no hay tarifarios cargados."
+                buscador="Transportista"
             />
 
             <Suspense fallback={<Loader size="sm" />}>

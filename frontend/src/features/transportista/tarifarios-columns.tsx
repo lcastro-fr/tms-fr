@@ -25,18 +25,22 @@ export function tarifariosColumns({
 }: Acciones): ColumnDefs<TarifarioOut> {
     return [
         { accessorKey: "transportista_razon_social", header: "Transportista" },
+        // Las fechas y los contadores quedan fuera de la búsqueda de texto: el accessor es el
+        // ISO y la celda muestra DD/MM/YYYY, así que buscar lo que se ve no encontraría nada.
         {
             accessorKey: "vigente_desde",
             header: "Vigente desde",
+            enableGlobalFilter: false,
             cell: ({ row }) => formatearFecha(row.original.vigente_desde),
         },
         {
             accessorKey: "vigente_hasta",
             header: "Vigente hasta",
+            enableGlobalFilter: false,
             cell: ({ row }) => formatearFecha(row.original.vigente_hasta, "Sin cierre"),
         },
-        { accessorKey: "cantidad_fletes", header: "Fletes" },
-        { accessorKey: "cantidad_conceptos", header: "Conceptos" },
+        { accessorKey: "cantidad_fletes", header: "Fletes", enableGlobalFilter: false },
+        { accessorKey: "cantidad_conceptos", header: "Conceptos", enableGlobalFilter: false },
         {
             id: "estado",
             header: "Estado",

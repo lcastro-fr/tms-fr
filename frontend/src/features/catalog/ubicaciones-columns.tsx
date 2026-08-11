@@ -12,7 +12,8 @@ export function ubicacionesColumns({ onEditar, puedeEditar }: Acciones): ColumnD
     return [
         { accessorKey: "codigo", header: "Código" },
         { accessorKey: "nombre", header: "Nombre" },
-        { accessorKey: "tipo", header: "Tipo" },
+        // Valor tabulado: su filtro es un Select por columna, no la búsqueda de texto libre.
+        { accessorKey: "tipo", header: "Tipo", enableGlobalFilter: false },
         { accessorKey: "localidad", header: "Localidad" },
         { accessorKey: "provincia", header: "Provincia" },
         {

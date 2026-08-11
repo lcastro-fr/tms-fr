@@ -185,8 +185,8 @@ en `http.ts`: eso cerraría el ciclo `router → routes → features → api →
   `components/`, reciben `columns` + `data` y renderizan con `<Table>` de Mantine. Nada de
   `<table>` a mano en un feature.
 - **Son dos componentes y no uno con props opcionales**, y es a propósito:
-  - `DataTable` — lista simple, con selección de filas (`rowSelection`). Lo usan zonas y
-    ubicaciones.
+  - `DataTable` — lista simple, con selección de filas (`rowSelection`). Lo usan zonas,
+    ubicaciones y tarifarios.
   - `DataTableExpandible` — lista con un detalle por fila (`getExpandedRowModel`), sin
     selección. Lo usa órdenes de servicio. Agrega él mismo la columna del chevron —es mecánica
     de la tabla, no dominio— y el `colSpan` del panel sale de `getVisibleFlatColumns().length + 1`:
@@ -201,6 +201,44 @@ en `http.ts`: eso cerraría el ciclo `router → routes → features → api →
   `rowExpansion` hace exactamente esto, pero `getExpandedRowModel` ya viene en el
   `@tanstack/react-table` instalado. La librería sumaba una dependencia más `clsx`, un
   `docker compose build web`, y un `DataTable` que colisiona de nombre con el nuestro.
+- **La barra de búsqueda es opt-in y la prende el prop `buscador`**, que es el placeholder: sin
+  el prop no hay barra. La tienen los dos componentes y la usan las cuatro pantallas. Es
+  client-side sobre las filas ya cargadas, sin debounce —el de `OrdenesServicioPanel` existe
+  porque navega y refetchea; acá es una pasada sincrónica sobre un array en memoria, y con la
+  caja vacía `getFilteredRowModel` corta antes de filtrar—. El estado es local del componente y
+  no va a los search params: `components/` no conoce el router.
+- **Sólo se busca en columnas de texto libre. Una columna de valor tabulado (enum, booleano) o
+  formateada distinto de su accessor declara `enableGlobalFilter: false`.** Las tabuladas porque
+  su filtro natural es un `<Select>` por columna —el paso siguiente—, y las formateadas porque
+  el filtro global compara contra el **accessor**, no contra lo que muestra la celda: buscar
+  `11/08` no encuentra un `fecha_viaje` que es ISO, y el `accessorFn` de `costo` devuelve el
+  número crudo con `-1` de centinela, así que un `1` traería todas las OS **sin** costo. El
+  `filterFn` de la columna no sirve para esto: TanStack usa uno solo para toda la búsqueda
+  global, y la única palanca por columna es `enableGlobalFilter`.
+- **Las dos tablas pasan `getColumnCanGlobalFilter: () => true`, y no es decorativo.** El default
+  de TanStack decide qué columnas se buscan mirando **sólo la primera fila** (`typeof value ===
+  "string" || "number"`), así que una columna nullable como `codigo` o `localidad` cuya primera
+  fila viene en `null` queda afuera de la búsqueda **para toda la tabla**, y vuelve a entrar
+  cuando un filtro server-side cambia cuál es la primera fila. Las de display siguen excluidas
+  igual: `getCanGlobalFilter` termina en un `&& !!column.accessorFn`. Está cubierto en
+  `DataTable.test.tsx`, que es el único test del archivo que falla si se saca la línea.
+- **El filtro es sin acentos y sin distinguir mayúsculas** (`filtroGlobalTexto` +
+  `lib/texto.ts`): los datos traen "Córdoba" y nadie los tipea así. La aguja se normaliza una
+  vez por tecla y no una por celda, con el hook `resolveFilterValue` que TanStack llama antes
+  del loop de filas.
+- **Filtrar a cero filas muestra un mensaje propio con el término, distinto de `vacio`.** El
+  `vacio` es del caller y habla de los datos; el otro es de la tabla y es genérico, porque
+  `components/` no conoce dominio. Antes los dos gateaban con `data.length === 0`, así que
+  filtrar todo dejaba un `<tbody>` vacío y mudo. El conteo sale de `getFilteredRowModel()` y
+  **no** de `getRowModel()`: `getPaginationRowModel` no clampea el `pageIndex`, así que el
+  conteo paginado es 0 por un commit cada vez que la búsqueda achica los resultados estando en
+  página > 1, y el mensaje parpadearía tipeando normal.
+- **La paginación vuelve sola a la página 1 al buscar** — el memo de `getFilteredRowModel` llama
+  a `_autoResetPageIndex()` en su `onChange` y ninguna tabla es `manualPagination`. Cae en un
+  microtask, que importa sólo para los tests (`findByText`, no `getByText`).
+- **En zonas, una fila seleccionada que el filtro esconde sigue contando** en "Visualizar (n)":
+  `seleccionadas` se computa sobre `zonas`, no sobre el row model. Es a propósito —buscar es una
+  forma de armar una selección entre páginas—, así que no se "arregla" limpiando la selección.
 - Las **column defs viven en el feature**: qué columna, qué label y cómo se formatea un
   precio es conocimiento de dominio.
 - El formateo pasa en la `cell`, usando `lib/money.ts` y `lib/date.ts`. Una columna de
@@ -452,6 +490,11 @@ Mantine los consulta**, así que sin esos mocks cualquier render con `MantinePro
 explota. El mock de `ResizeObserver` dejó de ser sólo de Mantine: `MapaBase` lo usa para su
 `invalidateSize`, así que sacarlo ahora rompe el mapa también.
 
+También hace `afterEach(cleanup)`, y hace falta explícitamente: el auto-cleanup de Testing
+Library se registra sólo si `afterEach` es global, y `vite.config.ts` **no prende `globals`**.
+Sin esa línea, dos `render()` en un mismo archivo dejan los dos árboles montados y cualquier
+query encuentra elementos duplicados.
+
 Los archivos de test cubren exactamente lo que es silencioso cuando se rompe:
 
 - `src/app/providers.test.tsx` — smoke test del árbol de providers.
@@ -473,6 +516,14 @@ Los archivos de test cubren exactamente lo que es silencioso cuando se rompe:
   Leaflet de verdad con un `getBoundingClientRect` falso.
 - `src/components/SelectorPunto.test.tsx` — el click del mapa emite `[lng, lat]`, y el marcador
   es arrastrable y **no** usa el ícono default (`icon.options.iconUrl` tiene que ser `undefined`).
+- `src/components/DataTable.test.tsx` — la búsqueda global, que casi toda falla en silencio: que
+  una columna nullable con la primera fila en `null` se busque igual (el candado sobre
+  `getColumnCanGlobalFilter`), que `cordoba` encuentre "Córdoba", que las columnas con
+  `enableGlobalFilter: false` y las de display **no** se busquen, que los dos estados vacíos sean
+  distintos, y que la paginación vuelva a la página 1. Es el único test del repo que envuelve en
+  `MantineProvider` a mano: `TextInput`/`Table`/`CloseButton` llaman a `useMantineTheme()`, que
+  tira sin provider —los tests de mapa se salvan porque `MapaBase` es Leaflet puro—.
+- `src/lib/texto.test.ts` — `normalizarTexto`, incluido el caso sorpresa: la `ñ` queda en `n`.
 
 **El límite de jsdom con el mapa:** nada que use el renderer de canvas se puede testear —
 `getContext()` devuelve `null` y muere en `clearRect`. Por eso el error de `classList` de
@@ -587,10 +638,16 @@ el cableado, no el render.
   mismo número que multiplica `precio_dia` en el costo: restarlo acá lo haría divergir del costo
   sin que nadie se entere. Un ingreso 23:57 y un egreso 01:00 son **1 día**, no una hora — hay
   filas reales así en la base.
-- **La tabla de ubicaciones no tiene búsqueda por texto.** Son ~1785 filas en 90 páginas de 20,
-  así que encontrar un código puntual es incómodo. Los dos componentes de tabla ya cablean
-  `getFilteredRowModel()` pero ninguno expone estado de `globalFilter`; agregarlo es client-side
-  y sin costo de backend.
+- **Falta el filtro por columna, que es el paso siguiente de la búsqueda.** La barra global ya
+  cubre el texto libre (ver "Tablas"), y las columnas de valor tabulado quedaron marcadas con
+  `enableGlobalFilter: false` justamente esperándolo: para un enum el control es un `<Select>`
+  por columna, no un `includes` de texto. Hoy no hay forma de filtrar por tipo de ubicación,
+  estado de tarifario, vía ni tipo de operación sin mirar la columna a ojo.
+- **En órdenes de servicio conviven dos cajas de búsqueda, y es a propósito.** La de arriba es
+  server-side (`numero` → search param → loader → refetch, con debounce de 300 ms) y **trae**
+  filas del backend por número de ticket o remito; la de adentro de la tabla es client-side y
+  **achica** las que ya están. Por eso su placeholder empieza con "Filtrar lo cargado": dos
+  cajas con el mismo label se leen como un bug.
 - **Editar una ubicación la marca como validada**, y por eso el botón dice "Guardar y validar".
   La dirección se muestra read-only: es la referencia para saber dónde va el punto, pero
   corregirla sería re-geolocalizar y el upsert de SAP la vuelve a traer.

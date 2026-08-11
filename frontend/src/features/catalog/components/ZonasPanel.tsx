@@ -121,6 +121,7 @@ export function ZonasPanel() {
                 rowSelection={seleccion}
                 onRowSelectionChange={setSeleccion}
                 vacio="Todavía no hay zonas cargadas."
+                buscador="Nombre"
             />
 
             <Suspense fallback={<Loader size="sm" />}>
