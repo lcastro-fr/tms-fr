@@ -1,4 +1,5 @@
 import { ActionIcon, Box, Group, Pagination, Table, Text } from "@mantine/core";
+import { CaretRight } from "@phosphor-icons/react/CaretRight";
 import type { ExpandedState, SortingState } from "@tanstack/react-table";
 import {
     flexRender,
@@ -14,6 +15,7 @@ import { Fragment, useState } from "react";
 
 import { BuscadorTabla } from "./BuscadorTabla";
 import type { ColumnDefs } from "./DataTable";
+import { EncabezadoTabla } from "./EncabezadoTabla";
 import { filtroGlobalTexto } from "./filtro-global";
 
 type Props<T> = {
@@ -57,10 +59,8 @@ export function DataTableExpandible<T>({
         onExpandedChange: setExpanded,
         onGlobalFilterChange: setBusqueda,
         globalFilterFn: filtroGlobalTexto,
-        // Igual que en DataTable: sin esto, una columna nullable que arranca en null queda
-        // afuera de la búsqueda para toda la tabla. El detalle de la fila no es un sub-row,
-        // así que la búsqueda es sobre los padres y nada más.
         getColumnCanGlobalFilter: () => true,
+        sortDescFirst: false,
         getRowCanExpand: (row) => puedeExpandir(row.original),
         initialState: { pagination: { pageSize } },
         getCoreRowModel: getCoreRowModel(),
@@ -107,20 +107,10 @@ export function DataTableExpandible<T>({
                         <Table.Tr key={grupo.id}>
                             <Table.Th w={40} />
                             {grupo.headers.map((header) => (
-                                <Table.Th
+                                <EncabezadoTabla
                                     key={header.id}
-                                    onClick={header.column.getToggleSortingHandler()}
-                                    style={
-                                        header.column.getCanSort()
-                                            ? { cursor: "pointer" }
-                                            : undefined
-                                    }
-                                >
-                                    {flexRender(
-                                        header.column.columnDef.header,
-                                        header.getContext(),
-                                    )}
-                                </Table.Th>
+                                    header={header}
+                                />
                             ))}
                         </Table.Tr>
                     ))}
@@ -144,7 +134,17 @@ export function DataTableExpandible<T>({
                                             }
                                             onClick={row.getToggleExpandedHandler()}
                                         >
-                                            <Chevron abierto={row.getIsExpanded()} />
+                                            <CaretRight
+                                                size={16}
+                                                style={{
+                                                    transform:
+                                                        row.getIsExpanded()
+                                                            ? "rotate(90deg)"
+                                                            : undefined,
+                                                    transition:
+                                                        "transform 150ms ease",
+                                                }}
+                                            />
                                         </ActionIcon>
                                     )}
                                 </Table.Td>
@@ -191,27 +191,5 @@ export function DataTableExpandible<T>({
                 </Group>
             )}
         </Box>
-    );
-}
-
-function Chevron({ abierto }: { abierto: boolean }) {
-    return (
-        <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            style={{
-                transform: abierto ? "rotate(90deg)" : undefined,
-                transition: "transform 150ms ease",
-            }}
-        >
-            <path d="m9 18 6-6-6-6" />
-        </svg>
     );
 }

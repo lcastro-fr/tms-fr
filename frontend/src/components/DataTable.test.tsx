@@ -25,7 +25,12 @@ const FILAS: Fila[] = [
 const COLUMNS: ColumnDefs<Fila> = [
     { accessorKey: "codigo", header: "Código" },
     { accessorKey: "localidad", header: "Localidad" },
-    { accessorKey: "tipo", header: "Tipo", enableGlobalFilter: false },
+    {
+        accessorKey: "tipo",
+        header: "Tipo",
+        enableGlobalFilter: false,
+        enableSorting: false,
+    },
     { accessorKey: "costo", header: "Costo", enableGlobalFilter: false },
     {
         id: "acciones",
@@ -62,7 +67,16 @@ function renderTabla({
 }
 
 const buscar = (texto: string) =>
-    userEvent.type(screen.getByRole("textbox", { name: "Buscar en la tabla" }), texto);
+    userEvent.type(
+        screen.getByRole("textbox", { name: "Buscar en la tabla" }),
+        texto,
+    );
+
+const codigosVisibles = () =>
+    screen
+        .getAllByRole("row")
+        .slice(1)
+        .map((fila) => fila.querySelector("td")?.textContent);
 
 describe("DataTable con buscador", () => {
     it("busca en una columna nullable aunque la primera fila sea null", async () => {
@@ -124,7 +138,9 @@ describe("DataTable con buscador", () => {
         renderTabla({ data: [], vacio: "Todavía no hay filas." });
 
         expect(screen.getByText("Todavía no hay filas.")).toBeInTheDocument();
-        expect(screen.queryByText(/Ninguna fila coincide/)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText(/Ninguna fila coincide/),
+        ).not.toBeInTheDocument();
     });
 
     it("sin coincidencias muestra el término buscado y no el mensaje del caller", async () => {
@@ -132,8 +148,12 @@ describe("DataTable con buscador", () => {
 
         await buscar("zzz");
 
-        expect(screen.getByText("Ninguna fila coincide con “zzz”.")).toBeInTheDocument();
-        expect(screen.queryByText("Todavía no hay filas.")).not.toBeInTheDocument();
+        expect(
+            screen.getByText("Ninguna fila coincide con “zzz”."),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByText("Todavía no hay filas."),
+        ).not.toBeInTheDocument();
     });
 
     it("vuelve a la primera página al buscar", async () => {
@@ -150,12 +170,16 @@ describe("DataTable con buscador", () => {
 
     it("el botón de limpiar restituye las filas", async () => {
         renderTabla();
-        const input = screen.getByRole("textbox", { name: "Buscar en la tabla" });
+        const input = screen.getByRole("textbox", {
+            name: "Buscar en la tabla",
+        });
 
         await buscar("rosario");
         expect(screen.queryByText("AAA")).not.toBeInTheDocument();
 
-        await userEvent.click(screen.getByRole("button", { name: "Limpiar la búsqueda" }));
+        await userEvent.click(
+            screen.getByRole("button", { name: "Limpiar la búsqueda" }),
+        );
 
         expect(screen.getByText("AAA")).toBeInTheDocument();
         expect(input).toHaveValue("");
@@ -166,5 +190,61 @@ describe("DataTable con buscador", () => {
 
         expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
         expect(screen.getByText("AAA")).toBeInTheDocument();
+    });
+});
+
+describe("DataTable ordenando por columna", () => {
+    it("cicla ascendente, descendente y sin orden", async () => {
+        renderTabla();
+        const encabezado = screen.getByRole("button", { name: "Costo" });
+
+        // Arranca ascendente aunque el costo sea numérico: sin sortDescFirst en false la
+        // dirección del primer click la decidiría el tipo de valor de la primera fila.
+        await userEvent.click(encabezado);
+        expect(codigosVisibles()).toEqual(["AAA", "CCC", "BBB"]);
+
+        await userEvent.click(encabezado);
+        expect(codigosVisibles()).toEqual(["BBB", "CCC", "AAA"]);
+
+        await userEvent.click(encabezado);
+        expect(codigosVisibles()).toEqual(["AAA", "BBB", "CCC"]);
+    });
+
+    it("publica el estado del orden en aria-sort", async () => {
+        renderTabla();
+        const columna = () =>
+            screen.getByRole("columnheader", { name: /Código/ });
+
+        expect(columna()).toHaveAttribute("aria-sort", "none");
+
+        await userEvent.click(screen.getByRole("button", { name: "Código" }));
+        expect(columna()).toHaveAttribute("aria-sort", "ascending");
+
+        await userEvent.click(screen.getByRole("button", { name: "Código" }));
+        expect(columna()).toHaveAttribute("aria-sort", "descending");
+    });
+
+    it("una columna sin orden no tiene botón ni aria-sort", () => {
+        renderTabla();
+
+        expect(
+            screen.queryByRole("button", { name: "Tipo" }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.getByRole("columnheader", { name: "Tipo" }),
+        ).not.toHaveAttribute("aria-sort");
+    });
+
+    it("el orden sobrevive a la búsqueda", async () => {
+        renderTabla();
+
+        await userEvent.click(screen.getByRole("button", { name: "Código" }));
+        await userEvent.click(screen.getByRole("button", { name: "Código" }));
+        expect(codigosVisibles()).toEqual(["CCC", "BBB", "AAA"]);
+
+        await buscar("o");
+
+        // "Rosario" y "Córdoba" matchean; el orden descendente sigue puesto.
+        expect(codigosVisibles()).toEqual(["CCC", "BBB"]);
     });
 });

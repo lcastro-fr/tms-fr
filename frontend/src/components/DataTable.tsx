@@ -15,6 +15,7 @@ import {
 import { useState } from "react";
 
 import { BuscadorTabla } from "./BuscadorTabla";
+import { EncabezadoTabla } from "./EncabezadoTabla";
 import { filtroGlobalTexto } from "./filtro-global";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
@@ -57,6 +58,7 @@ export function DataTable<T>({
         onGlobalFilterChange: setBusqueda,
         globalFilterFn: filtroGlobalTexto,
         getColumnCanGlobalFilter: () => true,
+        sortDescFirst: false,
         enableRowSelection: rowSelection !== undefined,
         onRowSelectionChange: (updater) => {
             if (!onRowSelectionChange) return;
@@ -105,20 +107,10 @@ export function DataTable<T>({
                     {table.getHeaderGroups().map((grupo) => (
                         <Table.Tr key={grupo.id}>
                             {grupo.headers.map((header) => (
-                                <Table.Th
+                                <EncabezadoTabla
                                     key={header.id}
-                                    onClick={header.column.getToggleSortingHandler()}
-                                    style={
-                                        header.column.getCanSort()
-                                            ? { cursor: "pointer" }
-                                            : undefined
-                                    }
-                                >
-                                    {flexRender(
-                                        header.column.columnDef.header,
-                                        header.getContext(),
-                                    )}
-                                </Table.Th>
+                                    header={header}
+                                />
                             ))}
                         </Table.Tr>
                     ))}

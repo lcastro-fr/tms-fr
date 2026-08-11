@@ -1,0 +1,8 @@
+/* El botón hereda la tipografía del <th>: sin esto el encabezado ordenable se ve más chico
+   y sin negrita que el resto. */
+.boton {
+    font: inherit;
+    color: inherit;
+    display: block;
+    width: 100%;
+}

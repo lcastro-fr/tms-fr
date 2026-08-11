@@ -7,7 +7,14 @@ están en `../backend/CLAUDE.md`.
 
 Stack: React 19 + TypeScript 6 + Vite 8. Mantine 9 (core, dates, form, hooks, modals,
 notifications). TanStack Router 1 (file-based), Query 5, Table 8. axios 1. dayjs.
-Leaflet 1.9 + react-leaflet 5 + geoman para el mapa de zonas.
+Leaflet 1.9 + react-leaflet 5 + geoman para el mapa de zonas. Phosphor 2 para los iconos.
+
+**Los iconos se importan de a uno, por subpath:** `@phosphor-icons/react/CaretUp`, nunca
+`@phosphor-icons/react`. El barrel exporta ~9000 iconos y Vite lo pre-bundlea entero: **6,9 MB**
+contra ~110 bytes del subpath. El `exports` del paquete mapea `./*` a `dist/csr/*`, y con
+`moduleResolution: "bundler"` los tipos resuelven igual. Antes de esto los iconos eran SVG a mano
+—quedó uno, el chevron de `DataTableExpandible`, que ya pasó a `CaretRight`—; no volver a
+escribirlos a mano.
 
 ## Alcance
 
@@ -201,6 +208,22 @@ en `http.ts`: eso cerraría el ciclo `router → routes → features → api →
   `rowExpansion` hace exactamente esto, pero `getExpandedRowModel` ya viene en el
   `@tanstack/react-table` instalado. La librería sumaba una dependencia más `clsx`, un
   `docker compose build web`, y un `DataTable` que colisiona de nombre con el nuestro.
+- **El `<th>` de las dos tablas es `EncabezadoTabla`**, y ahí vive todo el orden: una columna
+  ordenable renderiza un `UnstyledButton` —así se llega por teclado, no sólo por click— con el
+  caret de Phosphor al lado, y el `<th>` publica `aria-sort`. Una columna que no se puede ordenar
+  no lleva botón ni ícono ni `aria-sort`: el afford aparece sólo donde hay algo que apretar.
+  `getCanSort()` ya excluye sola a las de display, porque termina en `!!column.accessorFn`.
+- **El caret neutro atenuado es lo que dice que la columna se ordena.** Antes el orden funcionaba
+  —el `onClick` estaba en el `<th>` desde el principio— pero no había una sola señal en pantalla
+  de que existiera, salvo el `cursor: pointer`. El ciclo es ascendente → descendente → sin orden
+  (`enableSortingRemoval` viene en true).
+- **Las dos tablas pasan `sortDescFirst: false`, por lo mismo que `getColumnCanGlobalFilter`.** El
+  default de TanStack decide la dirección del primer click con `getAutoSortDir()`, que mira el
+  **tipo del valor de la primera fila**: string → ascendente, cualquier otra cosa → descendente.
+  O sea que una columna nullable como `localidad` arranca descendente sólo porque esa fila viene
+  en `null`, y cambia de sentido cuando un filtro server-side cambia cuál es la primera fila.
+  Ahora todas arrancan ascendente, incluidas las numéricas. Está cubierto en `DataTable.test.tsx`.
+- **El orden y la búsqueda son independientes**: filtrar no lo resetea (sí resetea la página).
 - **La barra de búsqueda es opt-in y la prende el prop `buscador`**, que es el placeholder: sin
   el prop no hay barra. La tienen los dos componentes y la usan las cuatro pantallas. Es
   client-side sobre las filas ya cargadas, sin debounce —el de `OrdenesServicioPanel` existe
@@ -516,7 +539,10 @@ Los archivos de test cubren exactamente lo que es silencioso cuando se rompe:
   Leaflet de verdad con un `getBoundingClientRect` falso.
 - `src/components/SelectorPunto.test.tsx` — el click del mapa emite `[lng, lat]`, y el marcador
   es arrastrable y **no** usa el ícono default (`icon.options.iconUrl` tiene que ser `undefined`).
-- `src/components/DataTable.test.tsx` — la búsqueda global, que casi toda falla en silencio: que
+- `src/components/DataTable.test.tsx` — el orden y la búsqueda global. Del orden: el ciclo
+  asc → desc → sin orden con las filas en el orden visible (el candado sobre `sortDescFirst`, que
+  falla si se saca la línea), el `aria-sort`, y que una columna no ordenable no tenga botón. De la
+  búsqueda, que casi toda falla en silencio: que
   una columna nullable con la primera fila en `null` se busque igual (el candado sobre
   `getColumnCanGlobalFilter`), que `cordoba` encuentre "Córdoba", que las columnas con
   `enableGlobalFilter: false` y las de display **no** se busquen, que los dos estados vacíos sean
