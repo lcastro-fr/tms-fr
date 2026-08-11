@@ -46,7 +46,9 @@ export function FilasTarifaFlete({ form, opciones, soloLectura }: Props) {
                     </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                    {form.values.tarifas_flete.map((fila, indice) => (
+                    {form.values.tarifas_flete.map((fila, indice) => {
+                        const bloqueada = soloLectura || fila.congelada;
+                        return (
                         <Fragment key={fila.key}>
                             <Table.Tr>
                                 <Table.Td>
@@ -54,7 +56,7 @@ export function FilasTarifaFlete({ form, opciones, soloLectura }: Props) {
                                         aria-label="Alcance"
                                         data={ALCANCES}
                                         allowDeselect={false}
-                                        disabled={soloLectura}
+                                        disabled={bloqueada}
                                         value={fila.alcance}
                                         onChange={(valor) =>
                                             cambiarAlcance(indice, valor as FilaFlete["alcance"])
@@ -74,7 +76,7 @@ export function FilasTarifaFlete({ form, opciones, soloLectura }: Props) {
                                                 : "Buscá por código o nombre"
                                         }
                                         data={fila.alcance === "zona" ? zonas : ubicaciones}
-                                        disabled={soloLectura}
+                                        disabled={bloqueada}
                                         {...form.getInputProps(`tarifas_flete.${indice}.referencia_id`)}
                                     />
                                 </Table.Td>
@@ -83,7 +85,7 @@ export function FilasTarifaFlete({ form, opciones, soloLectura }: Props) {
                                         aria-label="Modalidad"
                                         data={modalidades}
                                         allowDeselect={false}
-                                        disabled={soloLectura}
+                                        disabled={bloqueada}
                                         {...form.getInputProps(`tarifas_flete.${indice}.modalidad`)}
                                     />
                                 </Table.Td>
@@ -92,7 +94,7 @@ export function FilasTarifaFlete({ form, opciones, soloLectura }: Props) {
                                         aria-label="Tipo de camión"
                                         data={tiposCamion}
                                         allowDeselect={false}
-                                        disabled={soloLectura}
+                                        disabled={bloqueada}
                                         {...form.getInputProps(`tarifas_flete.${indice}.tipo_camion`)}
                                     />
                                 </Table.Td>
@@ -104,7 +106,7 @@ export function FilasTarifaFlete({ form, opciones, soloLectura }: Props) {
                                             { value: "true", label: "Con hombreador" },
                                         ]}
                                         allowDeselect={false}
-                                        disabled={soloLectura}
+                                        disabled={bloqueada}
                                         value={String(fila.hombreador)}
                                         onChange={(valor) =>
                                             form.setFieldValue(
@@ -126,12 +128,12 @@ export function FilasTarifaFlete({ form, opciones, soloLectura }: Props) {
                                         thousandSeparator="."
                                         decimalSeparator=","
                                         prefix="$ "
-                                        disabled={soloLectura}
+                                        disabled={bloqueada}
                                         {...form.getInputProps(`tarifas_flete.${indice}.precio`)}
                                     />
                                 </Table.Td>
                                 <Table.Td>
-                                    {!soloLectura && (
+                                    {!bloqueada && (
                                         <ActionIcon
                                             aria-label="Quitar tarifa de flete"
                                             variant="subtle"
@@ -155,7 +157,8 @@ export function FilasTarifaFlete({ form, opciones, soloLectura }: Props) {
                                 </Table.Tr>
                             )}
                         </Fragment>
-                    ))}
+                        );
+                    })}
                 </Table.Tbody>
             </Table>
 

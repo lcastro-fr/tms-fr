@@ -8,31 +8,30 @@ from transportista.services import TarifarioService
 
 class ActualizarTarifarioUseCase:
     """
-    Un tarifario que ya se usó para costear no se edita.
-
+    Un tarifario en uso conserva sus filas congeladas y sus metadatos: sólo admite sumar
+    tarifas nuevas. Si no está en uso, se reemplaza entero.
     """
 
     @staticmethod
     @transaction.atomic
     def execute(tarifario_id: int, data: TarifarioIn) -> TarifarioDetalleOut:
         tarifario = TarifarioService.get_tarifario_or_raise(tarifario_id)
-        if TarifarioService.esta_en_uso(tarifario.id):
-            raise TarifarioService.TarifarioEnUsoError(
-                "El tarifario ya se usó para costear una orden de servicio: cerrá su vigencia "
-                "y cargá uno nuevo",
-                detail={"tarifario_id": tarifario.id, "motivo": "en_uso"},
-            )
+        fletes = [f.model_dump() for f in data.tarifas_flete]
+        conceptos = [c.model_dump() for c in data.tarifas_concepto]
 
-        tarifario = TarifarioService.update_tarifario(
-            tarifario,
-            transportista_id=data.transportista_id,
-            vigente_desde=data.vigente_desde,
-            vigente_hasta=data.vigente_hasta,
+        en_uso = TarifarioService.esta_en_uso(tarifario.id)
+        if en_uso:
+            TarifarioService.agregar_hijos(tarifario, fletes=fletes, conceptos=conceptos)
+        else:
+            tarifario = TarifarioService.update_tarifario(
+                tarifario,
+                transportista_id=data.transportista_id,
+                vigente_desde=data.vigente_desde,
+                vigente_hasta=data.vigente_hasta,
+            )
+            TarifarioService.replace_hijos(tarifario, fletes=fletes, conceptos=conceptos)
+
+        fletes_out, conceptos_out = TarifarioService.get_hijos(tarifario.id)
+        return TarifarioDetalleOut.from_model(
+            tarifario, en_uso=en_uso, fletes=fletes_out, conceptos=conceptos_out
         )
-        TarifarioService.replace_hijos(
-            tarifario,
-            fletes=[f.model_dump() for f in data.tarifas_flete],
-            conceptos=[c.model_dump() for c in data.tarifas_concepto],
-        )
-        fletes, conceptos = TarifarioService.get_hijos(tarifario.id)
-        return TarifarioDetalleOut.from_model(tarifario, fletes=fletes, conceptos=conceptos)

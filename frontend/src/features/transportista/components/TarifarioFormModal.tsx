@@ -74,18 +74,16 @@ function Formulario({ detalle, modo, onClose }: FormularioProps) {
 
     const editandoExistente = modo === "edicion" && detalle !== null;
     const enUso = detalle?.en_uso ?? false;
-    // Un tarifario ya usado para costear se abre en sólo lectura: la salida es cerrar su
-    // vigencia y duplicarlo.
-    const puedeGuardar = editandoExistente
-        ? can("tarifarios.editar") && !enUso
-        : can("tarifarios.crear");
+    // Sin permiso todo queda en sólo lectura. En uso el permiso alcanza para agregar filas:
+    // las existentes y los metadatos quedan bloqueados fila por fila (`congelada`) y en el header.
+    const puedeGuardar = editandoExistente ? can("tarifarios.editar") : can("tarifarios.crear");
     const soloLectura = !puedeGuardar;
 
     const form = useForm<Valores>({
         initialValues:
             modo === "duplicado" && detalle !== null
                 ? valoresDuplicados(detalle)
-                : valoresIniciales(detalle),
+                : valoresIniciales(detalle, enUso),
         validate: {
             transportista_id: (valor) => (valor ? null : "Elegí un transportista"),
             vigente_desde: (valor) => (valor ? null : "Ingresá desde cuándo rige"),
@@ -184,8 +182,9 @@ function Formulario({ detalle, modo, onClose }: FormularioProps) {
                 {enUso && modo === "edicion" && (
                     <Alert color="orange" title="Este tarifario ya se usó para costear">
                         Sus precios quedaron congelados en el costo de al menos una orden de
-                        servicio, así que no se puede editar. Cerrá su vigencia y duplicalo para
-                        cargar los precios nuevos.
+                        servicio: las filas y la vigencia no se pueden modificar, pero sí podés
+                        agregar tarifas nuevas. Para cambiar un precio existente, cerrá su vigencia
+                        y duplicalo.
                     </Alert>
                 )}
 
@@ -202,13 +201,13 @@ function Formulario({ detalle, modo, onClose }: FormularioProps) {
                         searchable
                         allowDeselect={false}
                         data={transportistasData(opciones)}
-                        disabled={soloLectura}
+                        disabled={soloLectura || enUso}
                         {...form.getInputProps("transportista_id")}
                     />
                     <DateTimePicker
                         label="Vigente desde"
                         valueFormat="DD/MM/YYYY HH:mm"
-                        disabled={soloLectura}
+                        disabled={soloLectura || enUso}
                         {...form.getInputProps("vigente_desde")}
                     />
                     <DateTimePicker
@@ -216,7 +215,7 @@ function Formulario({ detalle, modo, onClose }: FormularioProps) {
                         placeholder="Sin cierre"
                         valueFormat="DD/MM/YYYY HH:mm"
                         clearable
-                        disabled={soloLectura}
+                        disabled={soloLectura || enUso}
                         {...form.getInputProps("vigente_hasta")}
                     />
                 </Group>

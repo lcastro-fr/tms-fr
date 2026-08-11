@@ -30,7 +30,9 @@ export function FilasTarifaConcepto({ form, opciones, soloLectura }: Props) {
                     </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                    {form.values.tarifas_concepto.map((fila, indice) => (
+                    {form.values.tarifas_concepto.map((fila, indice) => {
+                        const bloqueada = soloLectura || fila.congelada;
+                        return (
                         <Table.Tr key={fila.key}>
                             <Table.Td>
                                 <Select
@@ -39,7 +41,7 @@ export function FilasTarifaConcepto({ form, opciones, soloLectura }: Props) {
                                     nothingFoundMessage="Sin resultados"
                                     placeholder="Elegí un concepto"
                                     data={conceptos}
-                                    disabled={soloLectura}
+                                    disabled={bloqueada}
                                     {...form.getInputProps(
                                         `tarifas_concepto.${indice}.concepto_id`,
                                     )}
@@ -60,12 +62,12 @@ export function FilasTarifaConcepto({ form, opciones, soloLectura }: Props) {
                                     thousandSeparator="."
                                     decimalSeparator=","
                                     prefix="$ "
-                                    disabled={soloLectura}
+                                    disabled={bloqueada}
                                     {...form.getInputProps(`tarifas_concepto.${indice}.precio`)}
                                 />
                             </Table.Td>
                             <Table.Td>
-                                {!soloLectura && (
+                                {!bloqueada && (
                                     <ActionIcon
                                         aria-label="Quitar concepto"
                                         variant="subtle"
@@ -79,7 +81,8 @@ export function FilasTarifaConcepto({ form, opciones, soloLectura }: Props) {
                                 )}
                             </Table.Td>
                         </Table.Tr>
-                    ))}
+                        );
+                    })}
                 </Table.Tbody>
             </Table>
 
