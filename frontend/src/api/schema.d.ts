@@ -211,7 +211,48 @@ export interface paths {
         /** Lista las ubicaciones activas */
         get: operations["listarUbicaciones"];
         put?: never;
+        /**
+         * Crea una ubicación validada
+         * @description La coordenada es obligatoria y la ubicación nace validada. El código es opcional: es la clave con la que la ingesta de SAP reconoce sus filas, así que si se le pone uno que SAP también use, la próxima ingesta gana sobre el nombre y la dirección.
+         */
+        post: operations["crearUbicacion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ubicaciones/opciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tipos de ubicación y países para el formulario */
+        get: operations["opcionesUbicacion"];
+        put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ubicaciones/geocodificar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Busca la coordenada de una dirección sin guardar nada
+         * @description Es un preview: no crea ni modifica nada. Sólo geolocaliza direcciones de los países que soporta el proveedor; para el resto hay que marcar el punto a mano.
+         */
+        post: operations["geocodificarUbicacion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -340,7 +381,7 @@ export interface components {
          * PermisoCodigo
          * @enum {string}
          */
-        PermisoCodigo: "zonas.ver" | "zonas.crear" | "zonas.editar" | "zonas.eliminar" | "ubicaciones.ver" | "ubicaciones.editar" | "ordenes_servicio.ver" | "ordenes_servicio.editar" | "ordenes_servicio.calcular_costo" | "tarifarios.ver" | "tarifarios.crear" | "tarifarios.editar" | "tarifarios.eliminar";
+        PermisoCodigo: "zonas.ver" | "zonas.crear" | "zonas.editar" | "zonas.eliminar" | "ubicaciones.ver" | "ubicaciones.crear" | "ubicaciones.editar" | "ordenes_servicio.ver" | "ordenes_servicio.editar" | "ordenes_servicio.calcular_costo" | "tarifarios.ver" | "tarifarios.crear" | "tarifarios.editar" | "tarifarios.eliminar";
         /** SesionOut */
         SesionOut: {
             /** Id */
@@ -825,7 +866,69 @@ export interface components {
          * @enum {string}
          */
         TipoUbicacion: "planta" | "puerto" | "aeropuerto" | "cliente" | "expreso" | "otro";
-        /** UbicacionIn */
+        /**
+         * UbicacionCrearIn
+         * @description No hereda de UbicacionIn a propósito: los dos contratos están hechos para no coincidir, y
+         *     heredar volvería creable cualquier campo que el PUT gane en el futuro.
+         */
+        UbicacionCrearIn: {
+            /** Nombre */
+            nombre: string;
+            tipo: components["schemas"]["TipoUbicacion"];
+            /** Codigo */
+            codigo?: string | null;
+            /** Calle */
+            calle: string;
+            /** Localidad */
+            localidad: string;
+            /** Provincia */
+            provincia: string;
+            /** Pais Codigo */
+            pais_codigo: string;
+            coordinates: components["schemas"]["GeoJSONPoint"];
+        };
+        /** PaisOpcionOut */
+        PaisOpcionOut: {
+            /** Codigo */
+            codigo: string;
+            /** Nombre */
+            nombre: string;
+        };
+        /** UbicacionOpcionesOut */
+        UbicacionOpcionesOut: {
+            /** Tipos Ubicacion */
+            tipos_ubicacion: components["schemas"]["OpcionOut"][];
+            /** Paises */
+            paises: components["schemas"]["PaisOpcionOut"][];
+        };
+        /** UbicacionGeocodificadaOut */
+        UbicacionGeocodificadaOut: {
+            coordinates: components["schemas"]["GeoJSONPoint"];
+            /** Consulta */
+            consulta: string;
+        };
+        /**
+         * GeocodificarUbicacionIn
+         * @description Los nombres son los del formulario y de la columna, no los de GeocodeQuery: fieldErrors()
+         *     mapea el loc de pydantic al campo por nombre, y un 422 sobre `direccion` no caería en
+         *     ningún input.
+         */
+        GeocodificarUbicacionIn: {
+            /** Calle */
+            calle?: string | null;
+            /** Localidad */
+            localidad?: string | null;
+            /** Provincia */
+            provincia?: string | null;
+            /** Pais Codigo */
+            pais_codigo: string;
+        };
+        /**
+         * UbicacionIn
+         * @description El PUT sólo corrige. `codigo` y la dirección no entran a propósito: el primero es la clave
+         *     con la que upsert_by_codigo reconoce las filas de SAP, y la segunda es la entrada de la
+         *     geolocalización, que el upsert vuelve a traer.
+         */
         UbicacionIn: {
             /** Nombre */
             nombre: string;
@@ -2354,6 +2457,263 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UbicacionOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    crearUbicacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UbicacionCrearIn"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UbicacionOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    opcionesUbicacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UbicacionOpcionesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    geocodificarUbicacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeocodificarUbicacionIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UbicacionGeocodificadaOut"];
                 };
             };
             /** @description Bad Request */

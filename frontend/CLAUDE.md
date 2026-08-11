@@ -15,8 +15,9 @@ El frontend va detrás del backend, no delante. **Sólo se construyen pantallas 
 endpoints que existen.** Nada de inventar rutas ni mockear respuestas para adelantar UI:
 si falta el endpoint, el trabajo es en `../backend`.
 
-Hoy la API tiene veinticuatro operaciones: cuatro de auth, cinco del CRUD de zonas
-(`/api/v1/zonas/`), dos de ubicaciones (`/api/v1/ubicaciones/`, lista con filtro y PUT), cinco de
+Hoy la API tiene veintisiete operaciones: cuatro de auth, cinco del CRUD de zonas
+(`/api/v1/zonas/`), cinco de ubicaciones (`/api/v1/ubicaciones/`: lista con filtros, opciones,
+alta, geocodificar y PUT), cinco de
 órdenes de servicio (`/api/v1/ordenes-servicio/`: opciones, lista con filtros, detalle, PUT y el
 POST del costo), siete de tarifarios (`/api/v1/tarifarios/`: opciones, lista con filtros, detalle,
 POST, PUT, cierre de vigencia y DELETE) y una de máquina. Zonas, ubicaciones, órdenes de servicio
@@ -315,9 +316,22 @@ confinada a `components/` y a `EditorPolygono`. Los componentes declarativos (`P
 - El CSS de Leaflet lo importa `MapaBase` y el de geoman `EditorPolygono`, no `main.tsx`: así
   viaja en el chunk del mapa. Es CSS de librería, la única excepción a "nada de CSS global por
   componente".
-- El template de tiles es una constante en `MapaBase`. La atribución de OSM es obligatoria por
-  su licencia, y su servidor de tiles es una cortesía con política de uso: si el volumen crece,
-  se cambia esa constante.
+- **El basemap es CARTO Voyager, y `MapaBase` tiene los tres estilos en un `ESTILOS` para que
+  cambiarlo sea una palabra.** El estándar de OSM quedó afuera porque su relleno de landcover
+  —verde de bosques, beige de estepa y roca— se lee como relieve en la cordillera y la Patagonia y
+  **compite con lo único que importa en estas pantallas**: los polígonos de zonas y los ~1793
+  puntos dibujados encima. Positron fue el primer intento y se pasó para el otro lado: es tan
+  desaturado que el mapa no se lee. Voyager es el punto medio; `oscuro` (`dark_all`) queda como la
+  opción de máximo contraste. Ojo que **Voyager vive en otro path** (`rastertiles/voyager`, no
+  `light_all`). La atribución de **CARTO es obligatoria además de la de OSM**, por sus términos de
+  uso. `{s}` y `{r}` los resuelve Leaflet solo y no hace falta API key.
+- **Los puntos de `CapaUbicaciones` llevan halo blanco, y no es cosmético.** En Leaflet `color` es
+  el **trazo**: dejando el color del tipo ahí, cada punto era una mancha con borde del mismo color
+  que sobre un basemap con tinta desaparece. Ahora el color del tipo va en `fillColor` y el trazo
+  es blanco, que es exactamente lo que ya hacía el marcador de `SelectorPunto` con su
+  `border: 2px solid white`. Además aguanta un basemap oscuro sin tocar nada.
+- Si un polígono de zona tapa los nombres de localidad, la salida es un `*_nolabels` de base más
+  un `*_only_labels` en un pane de Leaflet por encima de los overlays.
 
 ## Auth y permisos
 
@@ -469,12 +483,14 @@ el cableado, no el render.
 
 - **Hay cuatro pantallas de dominio: `/zonas`, `/ubicaciones`, `/ordenes-servicio` y
   `/tarifarios`.** Zonas tiene
-  alta, edición y baja con mapa, más la capa opcional de puntos. Ubicaciones tiene **sólo
-  edición** —nacen de la ingesta de SAP— con dos filtros (pendientes de validar, sin coordenada)
-  y el punto elegido en el mapa. Órdenes de servicio también es **sólo edición**, por lo mismo:
+  alta, edición y baja con mapa, más la capa opcional de puntos. Ubicaciones tiene **alta y
+  edición, sin baja**: la mayoría nacen de la ingesta de SAP, pero un expreso o un puerto no los
+  manda nadie, así que hay alta propia con geolocalización asistida. Suma dos filtros (pendientes
+  de validar, sin coordenada) y el punto elegido en el mapa. Órdenes de servicio es **sólo
+  edición**, por lo mismo que antes:
   búsqueda por número de ticket o remito, rango de fecha de viaje, tres switches, la columna de
-  ticket, el detalle con tickets y remitos, y el cálculo del costo. Tarifarios es el CRUD
-  completo, y el único con alta propia.
+  ticket, el detalle con tickets y remitos, los destinos a facturar y el cálculo del costo.
+  Tarifarios es el CRUD completo.
 - **La OS tiene su propia lista de destinos, y es el segundo formulario con listas dinámicas.**
   `FilasDestinoOrden` copia el molde de `FilasTarifaFlete` (`insertListItem`/`removeListItem`,
   `<Select searchable limit={50}>` para las ~1793 ubicaciones, el error de fila entera renderizado
@@ -578,6 +594,39 @@ el cableado, no el render.
 - **Editar una ubicación la marca como validada**, y por eso el botón dice "Guardar y validar".
   La dirección se muestra read-only: es la referencia para saber dónde va el punto, pero
   corregirla sería re-geolocalizar y el upsert de SAP la vuelve a traer.
+- **Ubicaciones ya tiene alta, y el mismo modal hace las dos cosas.** `UbicacionFormModal` toma
+  `ubicacion: UbicacionOut | null` y `UbicacionesPanel` usa el tri-estado de `ZonasPanel`
+  (`undefined` cerrado, `null` creando). No se partió en dos porque el cableado del mapa es más de
+  la mitad del archivo y es idéntico en los dos modos; el precedente de partir (`DataTable` vs
+  `DataTableExpandible`) se justifica por props que aplican a la mitad de los usos, y acá todas
+  aplican a los dos.
+- **Los campos de dirección ahora son campos del form en los dos modos**, con
+  `readOnly={!esNuevo}`. Antes leían `ubicacion.calle` directo y no eran campos, y por eso un 422
+  sobre `calle` no tenía dónde caer. Van `readOnly` y no `disabled`, con una línea que explica por
+  qué no se editan: "gris y mudo" es la falla silenciosa de la UI.
+- **`TIPOS` murió: los tipos y los países salen de `/ubicaciones/opciones`** con
+  `staleTime: Infinity`, consumido con `useSuspenseQuery` **dentro del modal**, que ya está
+  envuelto en un `<Suspense>` por el panel. Así la ruta no prefetchea opciones que sólo sirven para
+  editar. **`COLOR_POR_TIPO` de `CapaUbicaciones` sigue hardcodeado y está bien**: los colores son
+  presentación, no datos del enum.
+- **"Geolocalizar" vive dentro del `Fieldset` de dirección**, no al lado de Guardar: no es una
+  alternativa de submit. Se deshabilita si calle, localidad y provincia están las tres vacías
+  —espejando el validador del backend, así el caso común no viaja—, en éxito muestra
+  **"Se buscó: …"** porque el backend corta la localidad en el guión y el pin saldría de un string
+  que el usuario no escribió, y en error muestra un `<Alert>` con el mensaje del proveedor más el
+  próximo paso. Aparece **también editando**: la bandeja de pendientes está llena de filas que la
+  ingesta no pudo geolocalizar y reintentar es buena parte del valor. Se esconde con
+  `canAlguno("ubicaciones.crear", "ubicaciones.editar")`, porque `<Can>` toma un permiso solo.
+- **El pin del geocoder puede ser el centroide del país y verse igual que un acierto.** El
+  proveedor devuelve 200 para una dirección inventada. Por eso el flujo es geolocalizar → mirar →
+  guardar, y no un alta que geolocaliza sola: el ojo del usuario es la única validación que hay.
+- **`CentrarEn` existe porque `MapContainer` sólo honra `center`/`zoom` al montar.** Sin él, tras
+  geolocalizar el mapa se queda donde estaba y el marcador aparece fuera de pantalla: la feature
+  *parece* rota. `EncuadrarEn` no sirve para un punto, `fitBounds` de un bounds degenerado zoomea
+  al máximo. Tiene test porque cuando se rompe se rompe en silencio.
+- **Al crear con "Sólo pendientes de validar" prendido, el filtro se limpia solo.** La ubicación
+  nueva nace validada, así que no entraría en ese filtro y el usuario vería que "no pasó nada". El
+  modal avisa con `onCreada` y el panel saca el filtro.
 - **Las ubicaciones no se paginan**, así que la capa de puntos del mapa de zonas baja las ~1785
   filas y descarta en el cliente las que no tienen coordenadas — mostrando cuántas fueron, que es
   lo que evita que sea un descarte silencioso.

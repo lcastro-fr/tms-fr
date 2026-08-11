@@ -1,9 +1,9 @@
-import { Group, Loader, Switch, Text } from "@mantine/core";
+import { Button, Group, Loader, Switch, Text } from "@mantine/core";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Suspense, lazy, useMemo, useState } from "react";
 
 import { DataTable } from "../../../components/DataTable";
-import { usePermisos } from "../../auth";
+import { Can, usePermisos } from "../../auth";
 import { ubicacionesQueryOptions } from "../api";
 import type { UbicacionOut, UbicacionesSeleccion } from "../api";
 import { ubicacionesColumns } from "../ubicaciones-columns";
@@ -11,6 +11,9 @@ import { ubicacionesColumns } from "../ubicaciones-columns";
 const UbicacionFormModal = lazy(() =>
     import("./UbicacionFormModal").then((m) => ({ default: m.UbicacionFormModal })),
 );
+
+// undefined: cerrado. null: creando. Una ubicación: editando.
+type Editando = UbicacionOut | null | undefined;
 
 type Props = {
     filters: UbicacionesSeleccion;
@@ -22,7 +25,7 @@ type Props = {
 export function UbicacionesPanel({ filters, seleccion, cargando, onFiltersChange }: Props) {
     const { can } = usePermisos();
     const { data: ubicaciones } = useSuspenseQuery(ubicacionesQueryOptions(filters));
-    const [editando, setEditando] = useState<UbicacionOut | null>(null);
+    const [editando, setEditando] = useState<Editando>(undefined);
 
     const sinCoordenadas = useMemo(
         () => ubicaciones.filter((u) => u.coordinates === null).length,
@@ -62,10 +65,15 @@ export function UbicacionesPanel({ filters, seleccion, cargando, onFiltersChange
                     />
                     {cargando && <Loader size="xs" />}
                 </Group>
-                <Text c="dimmed" size="sm">
-                    {ubicaciones.length} ubicaciones
-                    {sinCoordenadas > 0 && `, ${sinCoordenadas} sin coordenada`}
-                </Text>
+                <Group gap="md">
+                    <Text c="dimmed" size="sm">
+                        {ubicaciones.length} ubicaciones
+                        {sinCoordenadas > 0 && `, ${sinCoordenadas} sin coordenada`}
+                    </Text>
+                    <Can permiso="ubicaciones.crear">
+                        <Button onClick={() => setEditando(null)}>Nueva ubicación</Button>
+                    </Can>
+                </Group>
             </Group>
 
             <DataTable
@@ -80,10 +88,16 @@ export function UbicacionesPanel({ filters, seleccion, cargando, onFiltersChange
             />
 
             <Suspense fallback={<Loader size="sm" />}>
-                {editando && (
+                {editando !== undefined && (
                     <UbicacionFormModal
                         ubicacion={editando}
-                        onClose={() => setEditando(null)}
+                        onClose={() => setEditando(undefined)}
+                        // Nace validada: con el filtro de pendientes puesto no se vería.
+                        onCreada={() => {
+                            if (seleccion.validada === false) {
+                                onFiltersChange({ validada: undefined });
+                            }
+                        }}
                     />
                 )}
             </Suspense>

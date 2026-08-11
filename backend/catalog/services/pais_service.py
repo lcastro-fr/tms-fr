@@ -9,6 +9,10 @@ class PaisService:
         pass
 
     @staticmethod
+    def list_paises() -> list[Pais]:
+        return list(Pais.objects.order_by("nombre"))
+
+    @staticmethod
     def get_pais(codigo: str) -> Pais | None:
         return Pais.objects.filter(pk=codigo.strip().upper()).first()
 

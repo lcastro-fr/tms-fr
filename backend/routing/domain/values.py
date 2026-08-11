@@ -45,7 +45,9 @@ class GeocodeQuery(BaseModel):
 
     @field_validator("localidad", mode="after")
     @classmethod
-    def clean_localidad(cls, value: str) -> str:
+    def clean_localidad(cls, value: str | None) -> str | None:
+        if not value:
+            return value
         # A veces viene con la provincia incluida...
         return value.split("-")[0].strip()
 

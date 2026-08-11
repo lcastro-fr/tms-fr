@@ -5,8 +5,8 @@ from django.contrib.gis.geos import Point
 
 from catalog.enums import PAIS_LOCAL, SRID_WGS84
 from catalog.models import Ubicacion
+from conftest import GeocoderFalso
 from routing.domain.exceptions import RoutingError
-from routing.domain.ports import Geocoder
 from routing.domain.values import Coordinate, GeocodeQuery
 from routing.factory import GeocoderNoConfigurado, build_geocoder
 from tracking.dtos import TicketIngestIn
@@ -15,18 +15,6 @@ from tracking.use_cases import IngestTicketUseCase
 pytestmark = pytest.mark.django_db
 
 INGEST = "/api/v1/tickets/ingest"
-
-
-class GeocoderFalso(Geocoder):
-    def __init__(self, coordinate: Coordinate | None = None):
-        self.coordinate = coordinate
-        self.consultas: list[GeocodeQuery] = []
-
-    def geocode(self, query: GeocodeQuery) -> Coordinate:
-        self.consultas.append(query)
-        if self.coordinate is None:
-            raise RoutingError("sin resultados")
-        return self.coordinate
 
 
 @pytest.fixture

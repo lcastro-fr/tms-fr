@@ -105,7 +105,7 @@ saberlo antes de buscarlo en `logistica/`.
 
 ## La API hoy
 
-Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **veinticuatro operaciones**:
+Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **veintisiete operaciones**:
 
 | Método | Path | Auth | Entrada | Salida |
 |---|---|---|---|---|
@@ -125,6 +125,9 @@ Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **veinticuat
 | PUT | `/api/v1/zonas/{id}` | `zonas.editar` | `ZonaIn` | 200 `ZonaOut` |
 | DELETE | `/api/v1/zonas/{id}` | `zonas.eliminar` | — | 204 |
 | GET | `/api/v1/ubicaciones/` | `ubicaciones.ver` | `Query[UbicacionesFilters]` | 200 `list[UbicacionOut]` |
+| GET | `/api/v1/ubicaciones/opciones` | `ubicaciones.ver` | — | 200 `UbicacionOpcionesOut` |
+| POST | `/api/v1/ubicaciones/` | `ubicaciones.crear` | `UbicacionCrearIn` | 201 `UbicacionOut` |
+| POST | `/api/v1/ubicaciones/geocodificar` | `ubicaciones.crear` **o** `.editar` | `GeocodificarUbicacionIn` | 200 `UbicacionGeocodificadaOut` |
 | PUT | `/api/v1/ubicaciones/{id}` | `ubicaciones.editar` | `UbicacionIn` | 200 `UbicacionOut` |
 | GET | `/api/v1/tarifarios/opciones` | `tarifarios.ver` | — | 200 `TarifarioOpcionesOut` |
 | GET | `/api/v1/tarifarios/` | `tarifarios.ver` | `Query[TarifariosFilters]` | 200 `list[TarifarioOut]` |
@@ -267,13 +270,98 @@ Tiene **dos filtros y no son el mismo conjunto**, que es la distinción que impo
 Un `?validada=` vacío o con basura da 422 `payload_invalid`; desde la SPA no se llega porque el
 `validateSearch` de la ruta lo neutraliza antes.
 
-**Ubicaciones no tiene alta ni baja**, a propósito: nacen de la ingesta de SAP. El PUT sólo
-toca `nombre`, `tipo` y `coordinates`, y **marca `validada=True`** — editar es revisar. `codigo`
-no es editable porque es la clave con la que `upsert_by_codigo` las reconoce, y la dirección
-tampoco: es la entrada de la geolocalización y el upsert la vuelve a traer de SAP.
+**Ubicaciones tiene alta pero no baja.** La mayoría nacen de la ingesta de SAP, pero hay
+ubicaciones que SAP no manda nunca —un **expreso** al que se le factura, un puerto— y sin alta
+propia la única forma de cargarlas era el admin. El PUT sigue siendo sólo corrección: toca
+`nombre`, `tipo` y `coordinates`, y **marca `validada=True`** — editar es revisar. `codigo` no es
+editable porque es la clave con la que `upsert_by_codigo` las reconoce, y la dirección tampoco: es
+la entrada de la geolocalización y el upsert la vuelve a traer de SAP.
+
+**El alta usa `UbicacionCrearIn` y no `UbicacionIn`, a propósito.** Compartir el DTO obligaba a
+elegir entre romper esa regla o **declarar en el OpenAPI campos que el PUT acepta y descarta en
+silencio**. Y no hereda: los dos contratos están hechos para *no* coincidir, y heredar volvería
+creable cualquier campo que el PUT gane después. Que hoy el PUT ignore `calle` y `codigo` lo
+sostenía sólo el `extra="ignore"` de pydantic; ahora hay un test que lo fija.
+
+Lo que el alta exige y por qué:
+
+- **La coordenada es obligatoria y la fila nace `validada=True`.** Los dos caminos —marcar el
+  punto o aceptar el del geocoder— terminan en un punto que el humano vio. Permitir el alta sin
+  coordenada crearía el estado que este documento llama el peor posible: `validada=True` y sin
+  punto, afuera de la bandeja de pendientes **y** sin geolocalizar.
+- **`pais_codigo` es obligatorio**, y un código que no está en la tabla es **422, no el 404** de
+  `get_pais_or_raise`: un 404 en `POST /ubicaciones/` se lee como "no existe la ubicación". Mismo
+  criterio que `replace_destinos` con un `ubicacion_id` inexistente.
+- **`codigo` es opcional y si repite es 409.** Vacío queda `NULL`, que la unique parcial permite
+  repetido. `create_ubicacion` **re-lanza el `IntegrityError` cuando `codigo is None`**, porque
+  `uq_ubicacion_codigo` es parcial sobre `codigo IS NOT NULL`: ahí el error es otra cosa y
+  reportarlo como choque de código taparía el bug real.
+- **`calle`/`localidad`/`provincia` llevan `max_length` en el DTO.** Son columnas NOT NULL, y sin
+  el límite un campo largo es un `DataError` de Postgres → 500 donde tiene que ser 422. Es el
+  mismo pendiente que sigue abierto en `RemitoUbicacionIn`.
+- **Una `planta` sin `codigo` se rechaza con 422.** La ingesta busca la planta por
+  `get_ubicacion_by_codigo_or_raise(planta_codigo)`, así que una planta sin código no puede ser
+  origen de nada: es un callejón sin salida garantizado y silencioso.
+- **`destino_default` no se puede setear.** Es un singleton por clave detrás de una unique
+  parcial, el PUT tampoco lo edita, y cambiarlo re-tarifa todas las exportaciones. Sigue siendo
+  del admin.
 
 La barra final de `/zonas/` y `/ubicaciones/` es obligatoria: con `APPEND_SLASH` un GET sin
-barra redirige 301 y un POST sin barra falla. Los paths con id **no la llevan**.
+barra redirige 301 y un POST sin barra falla. Los paths con id **no la llevan**, y tampoco los
+literales `/ubicaciones/opciones` y `/ubicaciones/geocodificar`, que no chocan con
+`PUT /{int:ubicacion_id}` por el converter `int:` — el mismo mecanismo de
+`/ordenes-servicio/opciones`.
+
+### Geolocalizar es un preview, no parte del alta
+
+`POST /ubicaciones/geocodificar` no escribe nada: devuelve la coordenada y **`consulta`**, que es
+el `GeocodeQuery.as_text()` de lo que se buscó de verdad. Existe separado del POST porque el
+pedido era que el usuario **vea el pin antes de que se cree algo**, y geolocalizar adentro del alta
+no deja corregirlo.
+
+`GeocodificarUbicacionUseCase` recibe el geocoder **por constructor**, igual que
+`IngestTicketUseCase` — que es instance-based justamente para que los tests inyecten uno falso y
+no toquen la red. No lleva `@transaction.atomic`: no escribe, y envolver una llamada de red en un
+`atomic()` retiene la conexión al ritmo del proveedor.
+
+**`catalog` importa `routing` y eso no cruza ninguna regla:** `routing/` no es una app (no está en
+`INSTALLED_APPS`, no tiene modelos) y no importa nada de ninguna app, así que es la misma categoría
+que `catalog → shared` y no puede formar ciclo. Lo que sí cambió es que `routing/` pasó de un
+consumidor a dos.
+
+**`RoutingError` no se convirtió en `DomainError`, se mapea en el use case.** Cubre cosas que son
+bugs o errores de operación —"Respuesta inesperada de open route service", "No hay ORS_API_KEY"— y
+mapearlas solas a 422 le diría al usuario que rompió una regla cuando el que falló es el sistema,
+además de dejar de avisar a nadie. Y qué *significa* una falla de geocoding es decisión del caller:
+la ingesta degrada y reporta, este endpoint se niega y explica.
+
+Para poder distinguirlas se agregó `GeocoderNoConfiguradoError(RoutingError)`, que levanta
+`GeocoderNoConfigurado`. La ingesta atrapa la base, así que no cambió. El use case mapea:
+
+| se atrapa | se levanta | `detail.motivo` |
+|---|---|---|
+| `GeocoderNoConfiguradoError` | `GeolocalizacionNoDisponibleError` (422) | `no_configurado` — el mensaje **no nombra `ORS_API_KEY`** |
+| `RoutingError` | `GeolocalizacionFallidaError` (422) | `geocoder`, con `str(exc)` como `message` |
+
+**El proveedor casi nunca dice "no encontré", y esto es lo más importante de toda la feature.**
+Medido contra el ORS real:
+
+```
+Avenida Pellegrini 1500, Rosario, Santa Fe  -> [-60.646318, -32.956212]   correcto
+Calle Que No Existe 99999, Nowhereville     -> [-64.0, -34.0]             200 (!)
+Santa Fe (sólo provincia)                   -> [-60.814713, -30.326928]   centroide de la provincia
+```
+
+Una dirección inventada devuelve **200 con coordenadas redondas**, o sea un fallback a nivel país.
+El adapter descarta el `confidence` y el `layer` que Pelias sí manda, así que ni el endpoint ni la
+UI pueden distinguir una coincidencia de portal de un centroide. **Lo único que hoy lo evita es
+que el usuario ve el pin antes de guardar**, que es precisamente la razón por la que el preview
+está separado del alta. `GeocodificarUbicacionIn` rechaza con 422 el caso de las tres partes
+vacías —ahí el centroide era la respuesta garantizada— pero no puede hacer nada con una dirección
+basura.
+
+`SUPPORTED_COUNTRIES` es `{"AR": "Argentina"}`: cualquier otro país es 422 "no soportado"
+**antes de pegarle a la red**, y el camino que queda es marcar el punto a mano.
 
 `DELETE /zonas/{id}` es borrado lógico. **`TarifaFlete.zona` es `PROTECT`**, así que una zona
 con tarifas activas responde 409 `conflict` con `detail.tarifas_flete`: sin ese catch del
@@ -363,6 +451,18 @@ da 403.** `Operation._run_authentication` envuelve el callback en `try/except` y
 por `api.on_exception`, así que la excepción llega a nuestros handlers. La diferencia
 importa: el frontend trata el 401 como sesión muerta y desloguea, así que un usuario
 logueado sin permiso **tiene que ver 403**.
+
+**`SessionAuth(*codigos)` es OR, no AND.** El chequeo es
+`self.requeridos & get_user_permissions(...)`, o sea que alcanza con **uno** de los códigos.
+Durante mucho tiempo ninguna operación pasó más de uno, así que la semántica nunca se ejercitó;
+la primera es `POST /ubicaciones/geocodificar`, que acepta `ubicaciones.crear` **o**
+`ubicaciones.editar` porque el preview no escribe nada y las dos pantallas lo usan. Tres tests la
+fijan. Ojo con el envelope: `detail.requiere` lista los códigos **aceptados**, y se lee como si
+fueran todos exigidos — no se renombró porque otros tests asertan sobre esa clave.
+
+**`is_superuser` cortocircuita todo:** `PermisoService.codigos_de_usuario` devuelve el enum
+completo sin mirar roles, así que un permiso nuevo lo tiene el superuser desde el momento en que
+entra al enum. Para el resto sigue haciendo falta `sync_permisos` **y** asignarlo a un rol.
 
 ### Sesión y CSRF
 
@@ -716,10 +816,18 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
 - **Transportistas y conceptos adicionales son de sólo lectura por API.** Salen embebidos en
   `GET /tarifarios/opciones` para poblar el formulario, pero su alta, edición y baja siguen
   siendo del admin. Cargar un transportista nuevo es, hoy, un paso previo manual al tarifario.
-- **Una ubicación `expreso` se da de alta sólo por el admin.** No hay `POST /ubicaciones/` —nacen
-  de la ingesta de SAP— así que el expreso al que se le va a facturar hay que cargarlo a mano antes
-  de poder elegirlo como destino, igual que un transportista. Son pocos y estables, pero es un paso
-  previo manual y no hay nada en la UI que lo diga.
+- **El geocoder no distingue una dirección de un centroide.** Pelias devuelve `confidence` y
+  `layer` y el adapter los descarta, así que una dirección inventada vuelve como 200 con las
+  coordenadas del país (`[-64.0, -34.0]`, medido) y se ve igual que un acierto de portal. Hoy lo
+  tapa que el usuario revisa el pin antes de guardar; exponer el `layer` en
+  `UbicacionGeocodificadaOut` y avisar en la UI cuando no es nivel dirección es el próximo paso
+  obvio, y toca el adapter, que la ingesta también usa.
+- **No se puede crear una ubicación en un país que no esté en `catalog/paises.py`**, porque
+  `pais_codigo` es obligatorio en el alta. La tabla arranca con AR (y BR si se sembró), y
+  completarla es `sync_paises`, sin migración.
+- **Dar de baja una ubicación sigue siendo del admin.** Hay alta y edición por API, no borrado; con
+  `PROTECT` desde `RemitoDestino`, `OrdenServicioDestino` y `TarifaFlete`, un DELETE tendría que
+  mapear el `ProtectedError` a 409 como hace `ZonaService.delete_zona`.
 - **El costo no congela *qué* destinos se tarifaron, sólo cuántos.** `CostoOrdenServicio` guarda
   `cantidad_destinos` y no la lista, así que un swap de destino con el mismo count no lo detecta
   `esta_desactualizado` —incluido un cambio de `via` que mueve puerto↔aeropuerto, porque `via`

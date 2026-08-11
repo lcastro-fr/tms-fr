@@ -16,6 +16,11 @@ export type UbicacionesSeleccion = {
 };
 export type GeoJSONPoint = components["schemas"]["GeoJSONPoint"];
 export type TipoUbicacion = components["schemas"]["TipoUbicacion"];
+export type UbicacionCrearIn = components["schemas"]["UbicacionCrearIn"];
+export type UbicacionOpcionesOut = components["schemas"]["UbicacionOpcionesOut"];
+export type PaisOpcionOut = components["schemas"]["PaisOpcionOut"];
+export type GeocodificarUbicacionIn = components["schemas"]["GeocodificarUbicacionIn"];
+export type UbicacionGeocodificadaOut = components["schemas"]["UbicacionGeocodificadaOut"];
 
 export const zonasKeys = {
     all: ["zonas"] as const,
@@ -26,6 +31,7 @@ export const zonasKeys = {
 export const ubicacionesKeys = {
     all: ["ubicaciones"] as const,
     lista: (filters: UbicacionesFilters) => ["ubicaciones", "lista", filters] as const,
+    opciones: () => ["ubicaciones", "opciones"] as const,
 };
 
 export const zonasQueryOptions = () =>
@@ -62,10 +68,35 @@ export async function eliminarZona(id: number): Promise<void> {
     await http.delete(`/zonas/${id}`);
 }
 
+// Tipos de ubicación y países: no cambian mientras dure la sesión.
+export const ubicacionesOpcionesQueryOptions = () =>
+    queryOptions({
+        queryKey: ubicacionesKeys.opciones(),
+        queryFn: () =>
+            http.get<UbicacionOpcionesOut>("/ubicaciones/opciones").then((r) => r.data),
+        staleTime: Infinity,
+    });
+
 export async function actualizarUbicacion(
     id: number,
     payload: UbicacionIn,
 ): Promise<UbicacionOut> {
     const { data } = await http.put<UbicacionOut>(`/ubicaciones/${id}`, payload);
+    return data;
+}
+
+export async function crearUbicacion(payload: UbicacionCrearIn): Promise<UbicacionOut> {
+    const { data } = await http.post<UbicacionOut>("/ubicaciones/", payload);
+    return data;
+}
+
+/** Preview: no guarda nada, sólo devuelve la coordenada y qué se buscó. */
+export async function geocodificarUbicacion(
+    payload: GeocodificarUbicacionIn,
+): Promise<UbicacionGeocodificadaOut> {
+    const { data } = await http.post<UbicacionGeocodificadaOut>(
+        "/ubicaciones/geocodificar",
+        payload,
+    );
     return data;
 }

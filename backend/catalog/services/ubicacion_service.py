@@ -3,12 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from django.contrib.gis.geos import Point
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 
 from catalog.enums import SRID_WGS84, DestinoDefault, TipoUbicacion
 from catalog.models import Pais, Ubicacion
-from shared.exceptions import BusinessRuleError, NotFoundError
+from shared.exceptions import BusinessRuleError, ConflictError, NotFoundError
 
 
 class UbicacionService:
@@ -22,6 +22,9 @@ class UbicacionService:
         pass
 
     class DestinoDefaultNotFoundError(NotFoundError):
+        pass
+
+    class UbicacionAlreadyExistsError(ConflictError):
         pass
 
     @staticmethod
@@ -39,7 +42,9 @@ class UbicacionService:
     def list_ubicaciones_para_opciones() -> list[Ubicacion]:
         """Sin dirección y con `tiene_coordenadas` anotado para no traer la geometría."""
         return list(
-            Ubicacion.objects.only("id", "codigo", "nombre", "tipo", "localidad", "provincia", "pais")
+            Ubicacion.objects.only(
+                "id", "codigo", "nombre", "tipo", "localidad", "provincia", "pais"
+            )
             .select_related("pais")
             .annotate(tiene_coordenadas=Q(coordinates__isnull=False))
             .order_by("nombre")
@@ -58,6 +63,43 @@ class UbicacionService:
                 detail={"ubicacion_id": ubicacion_id},
             )
         return ubicacion
+
+    @staticmethod
+    def create_ubicacion(
+        nombre: str,
+        tipo: str,
+        calle: str,
+        localidad: str,
+        provincia: str,
+        pais: Pais,
+        lat: float,
+        lng: float,
+        codigo: str | None = None,
+    ) -> Ubicacion:
+        """Nace validada: el alta exige coordenada y el humano ya la vio."""
+        UbicacionService._check_tipo(tipo)
+        coordinates = UbicacionService._build_coordinates(lat, lng)
+
+        try:
+            with transaction.atomic():
+                return Ubicacion.objects.create(
+                    codigo=codigo,
+                    tipo=tipo,
+                    nombre=nombre,
+                    calle=calle,
+                    localidad=localidad,
+                    provincia=provincia,
+                    pais=pais,
+                    coordinates=coordinates,
+                    validada=True,
+                )
+        except IntegrityError as exc:
+            if codigo is None:
+                raise
+            raise UbicacionService.UbicacionAlreadyExistsError(
+                f"Ya existe una ubicación con código {codigo}",
+                detail={"codigo": codigo},
+            ) from exc
 
     @staticmethod
     def update_ubicacion(
@@ -136,9 +178,9 @@ class UbicacionService:
         codigo: str,
         tipo: str,
         nombre: str,
-        calle: str,
-        localidad: str,
-        provincia: str,
+        calle: str | None,
+        localidad: str | None,
+        provincia: str | None,
         pais: Pais | None = None,
         lat: float | None = None,
         lng: float | None = None,
@@ -151,9 +193,9 @@ class UbicacionService:
         campos: dict[str, Any] = {
             "tipo": tipo,
             "nombre": nombre,
-            "calle": calle,
-            "localidad": localidad,
-            "provincia": provincia,
+            "calle": calle or "",
+            "localidad": localidad or "",
+            "provincia": provincia or "",
         }
         al_crear = {**campos, "pais": pais, "coordinates": coordinates, "validada": validada}
 

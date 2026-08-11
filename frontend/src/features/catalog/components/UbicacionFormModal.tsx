@@ -12,17 +12,30 @@ import {
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+    useMutation,
+    useQueryClient,
+    useSuspenseQuery,
+} from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { ApiError, fieldErrors } from "../../../api/errors";
+import { CentrarEn } from "../../../components/CentrarEn";
 import { MapaBase } from "../../../components/MapaBase";
 import { SelectorPunto } from "../../../components/SelectorPunto";
 import { aLatLng } from "../../../lib/geojson";
-import { actualizarUbicacion, ubicacionesKeys } from "../api";
+import { usePermisos } from "../../auth";
+import {
+    actualizarUbicacion,
+    crearUbicacion,
+    geocodificarUbicacion,
+    ubicacionesKeys,
+    ubicacionesOpcionesQueryOptions,
+} from "../api";
 import type {
     GeoJSONPoint,
     TipoUbicacion,
+    UbicacionCrearIn,
     UbicacionIn,
     UbicacionOut,
 } from "../api";
@@ -30,66 +43,105 @@ import { useUbicaciones } from "../use-ubicaciones";
 import { CapaUbicaciones } from "./CapaUbicaciones";
 import { ControlUbicaciones } from "./ControlUbicaciones";
 
-const TIPOS: { value: TipoUbicacion; label: string }[] = [
-    { value: "planta", label: "Planta" },
-    { value: "puerto", label: "Puerto" },
-    { value: "aeropuerto", label: "Aeropuerto" },
-    { value: "cliente", label: "Cliente" },
-    { value: "expreso", label: "Expreso" },
-    { value: "otro", label: "Otro" },
-];
-
 type Props = {
-    ubicacion: UbicacionOut;
+    ubicacion: UbicacionOut | null;
     onClose: () => void;
+    onCreada?: () => void;
 };
 
 type Valores = {
     nombre: string;
     tipo: TipoUbicacion;
+    codigo: string;
+    calle: string;
+    localidad: string;
+    provincia: string;
+    pais_codigo: string;
     coordinates: GeoJSONPoint | null;
 };
 
-export function UbicacionFormModal({ ubicacion, onClose }: Props) {
+export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
     const queryClient = useQueryClient();
+    const { canAlguno } = usePermisos();
+    const { data: opciones } = useSuspenseQuery(
+        ubicacionesOpcionesQueryOptions(),
+    );
+    const esNuevo = ubicacion === null;
 
     const form = useForm<Valores>({
         initialValues: {
-            nombre: ubicacion.nombre,
-            tipo: (ubicacion.tipo as TipoUbicacion) ?? "cliente",
-            coordinates: ubicacion.coordinates,
+            nombre: ubicacion?.nombre ?? "",
+            tipo: (ubicacion?.tipo as TipoUbicacion) ?? "cliente",
+            codigo: ubicacion?.codigo ?? "",
+            calle: ubicacion?.calle ?? "",
+            localidad: ubicacion?.localidad ?? "",
+            provincia: ubicacion?.provincia ?? "",
+            pais_codigo: ubicacion?.pais_codigo ?? "AR",
+            coordinates: ubicacion?.coordinates ?? null,
         },
         validate: {
             nombre: (valor) => (valor.trim() ? null : "Ingresá un nombre"),
             coordinates: (valor) =>
                 valor ? null : "Marcá la coordenada en el mapa",
+            calle: (valor) =>
+                !esNuevo || valor.trim() ? null : "Ingresá la calle",
+            localidad: (valor) =>
+                !esNuevo || valor.trim() ? null : "Ingresá la localidad",
+            provincia: (valor) =>
+                !esNuevo || valor.trim() ? null : "Ingresá la provincia",
+            codigo: (valor, valores) =>
+                esNuevo && valores.tipo === "planta" && !valor.trim()
+                    ? "Una planta necesita código para que la ingesta la encuentre"
+                    : null,
         },
     });
 
     const [centro] = useState(() =>
-        ubicacion.coordinates ? aLatLng(ubicacion.coordinates) : undefined,
+        ubicacion?.coordinates ? aLatLng(ubicacion.coordinates) : undefined,
     );
-    const esPlanta = ubicacion.tipo === "planta";
+    const esPlanta = form.values.tipo === "planta";
 
     const ubicaciones = useUbicaciones();
     const vecinas = useMemo(
-        () => ubicaciones.dibujables.filter((u) => u.id !== ubicacion.id),
-        [ubicaciones.dibujables, ubicacion.id],
+        () => ubicaciones.dibujables.filter((u) => u.id !== ubicacion?.id),
+        [ubicaciones.dibujables, ubicacion?.id],
     );
 
-    const mutation = useMutation({
-        mutationFn: ({ nombre, tipo, coordinates }: Valores) => {
-            if (!coordinates) {
+    const tipos = opciones.tipos_ubicacion.map((o) => ({
+        value: o.value,
+        label: o.label,
+    }));
+    const paises = opciones.paises.map((p) => ({
+        value: p.codigo,
+        label: p.nombre,
+    }));
+
+    const guardar = useMutation({
+        mutationFn: (valores: Valores) => {
+            if (!valores.coordinates) {
                 throw new Error(
-                    "Sin coordenada: el validate del form tendría que haberlo frenado",
+                    "Sin coordenada: el validate tendría que haberlo frenado",
                 );
             }
-            const payload: UbicacionIn = {
-                nombre: nombre.trim(),
-                tipo,
-                coordinates,
+            if (ubicacion) {
+                const payload: UbicacionIn = {
+                    nombre: valores.nombre.trim(),
+                    tipo: valores.tipo,
+                    coordinates: valores.coordinates,
+                };
+                return actualizarUbicacion(ubicacion.id, payload);
+            }
+            const payload: UbicacionCrearIn = {
+                nombre: valores.nombre.trim(),
+                tipo: valores.tipo,
+                codigo: valores.codigo.trim() || null,
+                calle: valores.calle.trim(),
+                localidad: valores.localidad.trim(),
+                provincia: valores.provincia.trim(),
+                pais_codigo: valores.pais_codigo,
+                coordinates: valores.coordinates,
             };
-            return actualizarUbicacion(ubicacion.id, payload);
+            return crearUbicacion(payload);
         },
         onSuccess: (guardada) => {
             void queryClient.invalidateQueries({
@@ -97,14 +149,23 @@ export function UbicacionFormModal({ ubicacion, onClose }: Props) {
             });
             notifications.show({
                 color: "green",
-                message: `Se validó la ubicación ${guardada.nombre}`,
+                message: esNuevo
+                    ? `Se creó la ubicación ${guardada.nombre}`
+                    : `Se validó la ubicación ${guardada.nombre}`,
             });
+            if (esNuevo) {
+                onCreada?.();
+            }
             onClose();
         },
         onError: (error: ApiError) => {
             const campos = fieldErrors(error);
             if (Object.keys(campos).length > 0) {
                 form.setErrors(campos);
+                return;
+            }
+            if (error.code === "conflict") {
+                form.setErrors({ codigo: error.message });
                 return;
             }
             if (error.code === "business_rule") {
@@ -120,8 +181,39 @@ export function UbicacionFormModal({ ubicacion, onClose }: Props) {
         },
     });
 
+    const geocodificar = useMutation({
+        mutationFn: () =>
+            geocodificarUbicacion({
+                calle: form.values.calle.trim() || null,
+                localidad: form.values.localidad.trim() || null,
+                provincia: form.values.provincia.trim() || null,
+                pais_codigo: form.values.pais_codigo,
+            }),
+        onSuccess: (encontrada) => {
+            form.setFieldValue("coordinates", encontrada.coordinates);
+        },
+        onError: (error: ApiError) => {
+            const campos = fieldErrors(error);
+            if (Object.keys(campos).length > 0) {
+                form.setErrors(campos);
+            }
+        },
+    });
+
     const reglaDeNegocio =
-        mutation.error?.code === "business_rule" ? mutation.error : null;
+        guardar.error?.code === "business_rule" ? guardar.error : null;
+    const puedeGeocodificar = canAlguno(
+        "ubicaciones.crear",
+        "ubicaciones.editar",
+    );
+    const hayDireccion = Boolean(
+        form.values.calle.trim() ||
+        form.values.localidad.trim() ||
+        form.values.provincia.trim(),
+    );
+    const puntoGeocodificado = geocodificar.data
+        ? aLatLng(geocodificar.data.coordinates)
+        : null;
 
     return (
         <Modal
@@ -129,27 +221,30 @@ export function UbicacionFormModal({ ubicacion, onClose }: Props) {
             onClose={onClose}
             size="70rem"
             title={
-                ubicacion.codigo
-                    ? `${ubicacion?.nombre} (${ubicacion?.codigo})`
-                    : ubicacion?.nombre
+                esNuevo
+                    ? "Nueva ubicación"
+                    : ubicacion.codigo
+                      ? `${ubicacion.nombre} (${ubicacion.codigo})`
+                      : ubicacion.nombre
             }
             closeOnEscape={false}
             closeOnClickOutside={false}
         >
             <form
-                onSubmit={form.onSubmit((valores) => mutation.mutate(valores))}
+                onSubmit={form.onSubmit((valores) => guardar.mutate(valores))}
             >
                 <Stack gap="md">
                     {reglaDeNegocio && (
-                        <Alert color="red" title="La coordenada no es válida">
+                        <Alert color="red" title="No se pudo guardar">
                             {reglaDeNegocio.message}
                         </Alert>
                     )}
 
                     {esPlanta && (
                         <Alert color="yellow" title="Es una planta">
-                            Cambiarle el tipo hace que la ingesta de SAP rechace
-                            los tickets que la usan como planta de origen.
+                            {esNuevo
+                                ? "La ingesta de SAP busca las plantas por código, así que necesita uno para poder usarla como origen."
+                                : "Cambiarle el tipo hace que la ingesta de SAP rechace los tickets que la usan como planta de origen."}
                         </Alert>
                     )}
 
@@ -161,36 +256,92 @@ export function UbicacionFormModal({ ubicacion, onClose }: Props) {
                         />
                         <Select
                             label="Tipo"
-                            data={TIPOS}
+                            data={tipos}
                             allowDeselect={false}
                             {...form.getInputProps("tipo")}
                         />
+                        {esNuevo ? (
+                            <TextInput
+                                label="Código"
+                                placeholder="Opcional"
+                                maxLength={20}
+                                {...form.getInputProps("codigo")}
+                            />
+                        ) : (
+                            <TextInput
+                                label="Código"
+                                value={ubicacion.codigo ?? ""}
+                                readOnly
+                            />
+                        )}
                     </Group>
 
                     <Fieldset legend="Dirección de referencia">
                         <Stack gap="xs">
                             <TextInput
                                 label="Calle"
-                                value={ubicacion?.calle ?? ""}
-                                readOnly
+                                maxLength={200}
+                                readOnly={!esNuevo}
+                                {...form.getInputProps("calle")}
                             />
                             <Group grow align="flex-start">
                                 <TextInput
                                     label="Localidad"
-                                    value={ubicacion?.localidad ?? ""}
-                                    readOnly
+                                    maxLength={120}
+                                    readOnly={!esNuevo}
+                                    {...form.getInputProps("localidad")}
                                 />
                                 <TextInput
                                     label="Provincia"
-                                    value={ubicacion?.provincia ?? ""}
-                                    readOnly
+                                    maxLength={120}
+                                    readOnly={!esNuevo}
+                                    {...form.getInputProps("provincia")}
                                 />
-                                <TextInput
-                                    label="País"
-                                    value={ubicacion.pais ?? ""}
-                                    readOnly
-                                />
+                                {esNuevo ? (
+                                    <Select
+                                        label="País"
+                                        data={paises}
+                                        allowDeselect={false}
+                                        searchable
+                                        {...form.getInputProps("pais_codigo")}
+                                    />
+                                ) : (
+                                    <TextInput
+                                        label="País"
+                                        value={ubicacion.pais ?? ""}
+                                        readOnly
+                                    />
+                                )}
                             </Group>
+
+                            {geocodificar.isError && (
+                                <Alert
+                                    color="yellow"
+                                    title="No se pudo geolocalizar"
+                                >
+                                    {geocodificar.error.message} Marcá el punto
+                                    en el mapa.
+                                </Alert>
+                            )}
+                            {geocodificar.data && (
+                                <Text size="xs" c="dimmed">
+                                    Se buscó: {geocodificar.data.consulta}
+                                </Text>
+                            )}
+
+                            {puedeGeocodificar && (
+                                <Group justify="flex-end">
+                                    <Button
+                                        size="xs"
+                                        variant="light"
+                                        disabled={!hayDireccion}
+                                        loading={geocodificar.isPending}
+                                        onClick={() => geocodificar.mutate()}
+                                    >
+                                        Geolocalizar
+                                    </Button>
+                                </Group>
+                            )}
                         </Stack>
                     </Fieldset>
 
@@ -198,7 +349,10 @@ export function UbicacionFormModal({ ubicacion, onClose }: Props) {
                         <Input.Label>Coordenada</Input.Label>
                         <Text size="xs" c="dimmed" mb="xs">
                             Clickeá el mapa para ubicar el punto, o arrastrá el
-                            marcador. Al guardar, la ubicación queda validada.
+                            marcador.
+                            {esNuevo
+                                ? " La ubicación se guarda validada."
+                                : " Al guardar, la ubicación queda validada."}
                         </Text>
                         <Group mb="xs">
                             <ControlUbicaciones
@@ -217,6 +371,8 @@ export function UbicacionFormModal({ ubicacion, onClose }: Props) {
                                     form.setFieldValue("coordinates", punto)
                                 }
                             />
+                            {/* MapContainer sólo honra center al montar. */}
+                            <CentrarEn punto={puntoGeocodificado} />
                             {ubicaciones.mostrar && (
                                 <CapaUbicaciones ubicaciones={vecinas} />
                             )}
@@ -232,8 +388,8 @@ export function UbicacionFormModal({ ubicacion, onClose }: Props) {
                         <Button variant="default" onClick={onClose}>
                             Cancelar
                         </Button>
-                        <Button type="submit" loading={mutation.isPending}>
-                            Guardar y validar
+                        <Button type="submit" loading={guardar.isPending}>
+                            {esNuevo ? "Crear" : "Guardar y validar"}
                         </Button>
                     </Group>
                 </Stack>

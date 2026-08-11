@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from catalog.dtos import UbicacionOpcionOut
 from catalog.models import Ubicacion
 from catalog.services import UbicacionService
 
@@ -79,3 +80,32 @@ def test_un_upsert_con_coordenadas_si_actualiza_la_anterior():
     ubicacion = Ubicacion.objects.get(codigo="CL100")
     assert ubicacion.coordinates is not None
     assert (ubicacion.coordinates.x, ubicacion.coordinates.y) == pytest.approx((-58.3816, -34.6037))
+
+
+def test_la_opcion_de_una_ubicacion_sin_pais_no_revienta():
+    """
+    La ingesta crea ubicaciones sin país a propósito, y esta DTO la consumen
+    /ordenes-servicio/opciones y /tarifarios/opciones: sin el guard son dos 500.
+    """
+    ubicacion, _ = upsert("CL400", validada=False)
+    ubicacion.tiene_coordenadas = False
+
+    opcion = UbicacionOpcionOut.from_model(ubicacion)
+
+    assert opcion.pais is None
+    assert opcion.codigo == "CL400"
+
+
+def test_un_upsert_sin_direccion_no_rompe_las_columnas_not_null():
+    """SAP puede no mandar dirección, y calle/localidad/provincia son NOT NULL."""
+    ubicacion, creada = UbicacionService.upsert_by_codigo(
+        codigo="CL300",
+        tipo="cliente",
+        nombre="Sin dirección",
+        calle=None,
+        localidad=None,
+        provincia=None,
+    )
+
+    assert creada is True
+    assert (ubicacion.calle, ubicacion.localidad, ubicacion.provincia) == ("", "", "")

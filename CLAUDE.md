@@ -22,6 +22,9 @@ Cuatro pasos, en orden. No adelantarse a los siguientes.
    destinos, que el usuario carga en `/ordenes-servicio` y el costeo usa tal cual. Es lo que
    permite facturar hasta un puerto, un aeropuerto o un **expreso** cuando el remito dice otra
    cosa. Sin destinos cargados se siguen derivando de los remitos, que es el caso mayoritario.
+   Y como esos destinos SAP no los manda, `/ubicaciones` tiene **alta propia** con
+   geolocalización asistida: el usuario completa la dirección, pide la coordenada al geocoder o la
+   marca en el mapa, y guarda.
 2. **Eventos.** Registrar los eventos de cada ticket y calcular cuánto duró cada uno.
 3. **Orden de servicio.** Planificar la OS *antes* de que llegue el camión. Hoy
    `IngestTicketUseCase` crea una OS nueva por ticket; en este paso el ticket tiene que
@@ -177,8 +180,10 @@ Los de cada capa están en su documento. Estos cruzan las dos:
   `ConceptoAdicional` se leen por API para poblar el formulario de tarifario, pero darlos de
   alta sigue siendo un paso previo manual en el admin.
 - **El catálogo de permisos crece con el código.** `shared/permisos.py` es la fuente de
-  verdad, así que agregar un permiso es un cambio de código más `manage.py sync_permisos`,
-  no una fila cargada a mano.
+  verdad, así que agregar un permiso es un cambio de código más una migración (los `choices` se
+  serializan) más `manage.py sync_permisos`, no una fila cargada a mano. Y después hay que
+  **asignarlo a un rol en el admin**: un permiso nuevo no lo tiene nadie, salvo los superusers,
+  que reciben el enum completo sin mirar roles.
 - **`backend/seed/` reaparece como `root:root`.** Es el punto de montaje de
   `./seed:/app/seed:ro`, un mount anidado dentro del bind mount de `/app`, y Docker crea
   ese directorio como root sin importar el `user:`. Queda siempre tapado por el mount, así

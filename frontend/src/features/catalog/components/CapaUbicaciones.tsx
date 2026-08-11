@@ -29,11 +29,15 @@ export function CapaUbicaciones({ ubicaciones }: Props) {
                         key={ubicacion.id}
                         center={aLatLng(ubicacion.coordinates)}
                         renderer={renderer}
-                        radius={4}
+                        radius={5}
+                        // Halo blanco como el marcador de SelectorPunto: en Leaflet `color` es
+                        // el trazo, así que el color del tipo va en `fillColor`. Sin el halo un
+                        // punto de 5px se pierde sobre cualquier basemap con tinta.
                         pathOptions={{
-                            color: COLOR_POR_TIPO[ubicacion.tipo] ?? COLOR_POR_TIPO.otro,
-                            fillOpacity: 0.8,
-                            weight: 1,
+                            color: "#ffffff",
+                            weight: 1.5,
+                            fillColor: COLOR_POR_TIPO[ubicacion.tipo] ?? COLOR_POR_TIPO.otro,
+                            fillOpacity: 1,
                         }}
                     >
                         <Tooltip>

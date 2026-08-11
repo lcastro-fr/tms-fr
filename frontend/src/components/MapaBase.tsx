@@ -7,9 +7,19 @@ import type { ReactNode } from "react";
 import type { LatLng } from "../lib/geojson";
 import styles from "./MapaBase.module.css";
 
-const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+// Basemaps políticos de CARTO, de más a menos contraste. Cambiar ESTILO es toda la decisión;
+// el estándar de OSM quedó afuera porque su relleno de landcover se lee como relieve.
+const ESTILOS = {
+    voyager: "rastertiles/voyager",
+    positron: "light_all",
+    oscuro: "dark_all",
+} as const;
+const ESTILO: keyof typeof ESTILOS = "voyager";
+
+const TILE_URL = `https://{s}.basemaps.cartocdn.com/${ESTILOS[ESTILO]}/{z}/{x}/{y}{r}.png`;
 const TILE_ATTRIBUTION =
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors ' +
+    '&copy; <a href="https://carto.com/attributions">CARTO</a>';
 const TILE_MAX_ZOOM = 19;
 
 const CENTRO_ARGENTINA: LatLng = [-34.6, -58.45];

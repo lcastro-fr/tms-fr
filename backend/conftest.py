@@ -4,11 +4,32 @@ from typing import Any
 
 import pytest
 
+from routing.domain import Coordinate, GeocodeQuery, Geocoder, RoutingError
 from shared.permisos import PermisoCodigo
 from users.models import Permiso, Rol, RolPermiso, User, UsuarioRol
 from users.services import PermisoService
 
 PASSWORD = "test-pass-1234"
+
+
+class GeocoderFalso(Geocoder):
+    """Sin coordenada levanta el error que se le pase; `consultas` registra las llamadas."""
+
+    def __init__(self, coordinate: Coordinate | None = None, error: RoutingError | None = None):
+        self.coordinate = coordinate
+        self.error = error or RoutingError("sin resultados")
+        self.consultas: list[GeocodeQuery] = []
+
+    def geocode(self, query: GeocodeQuery) -> Coordinate:
+        self.consultas.append(query)
+        if self.coordinate is None:
+            raise self.error
+        return self.coordinate
+
+
+@pytest.fixture
+def geocoder_falso():
+    return GeocoderFalso
 
 
 @pytest.fixture

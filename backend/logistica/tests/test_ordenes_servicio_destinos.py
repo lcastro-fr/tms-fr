@@ -229,6 +229,17 @@ def test_el_detalle_de_una_camara_dice_que_los_destinos_no_aplican(editor, crear
     assert [d["ubicacion_id"] for d in body["destinos"]] == [expreso.id]
 
 
+def test_las_opciones_no_se_caen_con_una_ubicacion_sin_pais(editor, crear_ubicacion):
+    """La ingesta crea ubicaciones sin país; una sola alcanzaba para 500 este endpoint."""
+    sin_pais = crear_ubicacion("CL900", pais=None)
+
+    resp = editor.get(OPCIONES)
+
+    assert resp.status_code == 200
+    opcion = next(u for u in resp.json()["ubicaciones"] if u["id"] == sin_pais.id)
+    assert opcion["pais"] is None
+
+
 def test_las_opciones_traen_las_ubicaciones_con_tipo_y_coordenadas(editor, expreso):
     body = editor.get(OPCIONES).json()
 
