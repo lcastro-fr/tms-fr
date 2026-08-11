@@ -15,6 +15,7 @@ export type Valores = {
     tipo_operacion: OrdenServicioIn["tipo_operacion"];
     tipo_camion: OrdenServicioIn["tipo_camion"];
     via: OrdenServicioIn["via"];
+    modalidad: OrdenServicioIn["modalidad"];
     hombreador: boolean;
     facturable: boolean;
     destinos: FilaDestino[];
@@ -45,6 +46,7 @@ export function valoresIniciales(detalle: OrdenServicioDetalleOut): Valores {
         tipo_operacion: detalle.tipo_operacion as Valores["tipo_operacion"],
         tipo_camion: (detalle.tipo_camion as Valores["tipo_camion"]) ?? null,
         via: detalle.via as Valores["via"],
+        modalidad: (detalle.modalidad as Valores["modalidad"]) ?? null,
         hombreador: detalle.hombreador,
         facturable: detalle.facturable,
         destinos: aFilasDestino(detalle.destinos),
@@ -57,6 +59,7 @@ export function aPayload(valores: Valores): OrdenServicioIn {
         tipo_operacion: valores.tipo_operacion,
         tipo_camion: valores.tipo_camion,
         via: valores.via,
+        modalidad: valores.modalidad,
         hombreador: valores.hombreador,
         facturable: valores.facturable,
         // Siempre se mandan: [] borra, omitirlos sería "no tocar".

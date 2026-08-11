@@ -7,9 +7,10 @@ import pytest
 from catalog.enums import TipoCamion, TipoUbicacion
 from logistica.enums import OrigenDestinos
 from logistica.models import CostoOrdenServicio, OrdenServicioDestino
+from logistica.services import OrdenServicioService
 from shared.permisos import PermisoCodigo
 from tracking.services import RemitoService, TicketService
-from transportista.enums import TipoOperacion, Via
+from transportista.enums import ModalidadFlete, TipoOperacion, Via
 
 pytestmark = pytest.mark.django_db
 
@@ -275,6 +276,36 @@ def test_editar_los_destinos_desactualiza_el_costo_guardado(editor, crear_orden,
         content_type="application/json",
     )
 
+    assert editor.get(detalle(orden.id)).json()["costo_desactualizado"] is True
+
+
+def test_el_override_de_modalidad_desactualiza_el_costo(editor, crear_orden, expreso):
+    orden = crear_orden(tipo_camion=TipoCamion.SEMI.value)
+    OrdenServicioService.replace_destinos(orden, [expreso.id])
+    CostoOrdenServicio.objects.create(
+        orden_servicio=orden,
+        precio_flete=Decimal("185000.00"),
+        dias=0,
+        tipo_operacion=orden.tipo_operacion,
+        modalidad="directo",
+        tipo_camion=TipoCamion.SEMI.value,
+        hombreador=orden.hombreador,
+        cantidad_destinos=1,
+        fecha_viaje=orden.fecha_viaje,
+    )
+    # Un destino sin override: directo coincide con la inferencia, no está viejo.
+    assert editor.get(detalle(orden.id)).json()["costo_desactualizado"] is False
+
+    editor.put(
+        detalle(orden.id),
+        orden_in(
+            modalidad=ModalidadFlete.MULTIPARADA.value,
+            destinos=[{"ubicacion_id": expreso.id}],
+        ),
+        content_type="application/json",
+    )
+
+    # El override a multiparada ya no coincide con el directo congelado.
     assert editor.get(detalle(orden.id)).json()["costo_desactualizado"] is True
 
 

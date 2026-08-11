@@ -516,13 +516,11 @@ class TarifarioService:
         ubicaciones: list[Ubicacion],
         tipo_camion: str | None,
         hombreador: bool,
+        modalidad_override: ModalidadFlete | None = None,
     ) -> TarifaFlete:
         """
         La única tarifa que corresponde a un viaje.
 
-        Con un solo destino se intenta primero la tarifa por ubicación puntual y
-        se cae a la zona. Con varios destinos se resuelve sólo por zona, y la
-        zona tiene que cubrirlos a todos: un viaje no cruza zonas.
         """
         if not ubicaciones:
             raise TarifarioService.SinDestinosError(
@@ -535,7 +533,7 @@ class TarifarioService:
                 detail={"tarifario_id": tarifario.id},
             )
 
-        modalidad = ModalidadFlete.para_destinos(len(ubicaciones))
+        modalidad = modalidad_override or ModalidadFlete.para_destinos(len(ubicaciones))
         clave = {
             "tarifario": tarifario,
             "modalidad": modalidad.value,

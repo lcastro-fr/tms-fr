@@ -204,6 +204,14 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
                                     disabled={!puedeEditar}
                                     {...form.getInputProps("via")}
                                 />
+                                <Select
+                                    label="Modalidad"
+                                    data={opciones.modalidades}
+                                    placeholder="Automática (por destinos)"
+                                    clearable
+                                    disabled={!puedeEditar}
+                                    {...form.getInputProps("modalidad")}
+                                />
                             </SimpleGrid>
 
                             <Group gap="xl">

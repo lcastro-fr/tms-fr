@@ -172,6 +172,42 @@ def test_dos_destinos_explicitos_pasan_a_multiparada(crear_orden, crear_ubicacio
     assert exc.value.detail["motivo"] == "sin_zona_comun"
 
 
+def test_override_multiparada_fuerza_la_zona_con_un_solo_destino(
+    crear_orden, crear_ubicacion, tarifario
+):
+    """Con el override, la modalidad la fija el usuario y no la cantidad de destinos."""
+    orden = crear_orden(
+        tipo_camion=TipoCamion.SEMI.value, modalidad=ModalidadFlete.MULTIPARADA.value
+    )
+    destino = crear_ubicacion("CL510")
+    OrdenServicioService.replace_destinos(orden, [destino.id])
+    # Sin el override, un solo destino se costearía contra esta tarifa puntual directo.
+    tarifa_por_ubicacion(tarifario, destino, "60000.00", ModalidadFlete.DIRECTO)
+
+    with pytest.raises(TarifarioService.TarifaNoResueltaError) as exc:
+        CalcularCostoOrdenServicioUseCase.execute(orden.id)
+
+    # Multiparada se resuelve sólo por zona: la tarifa puntual no aplica.
+    assert exc.value.detail["motivo"] == "sin_zona_comun"
+
+
+def test_override_directo_toma_la_tarifa_puntual_con_dos_destinos(
+    crear_orden, crear_ubicacion, tarifario
+):
+    orden = crear_orden(tipo_camion=TipoCamion.SEMI.value, modalidad=ModalidadFlete.DIRECTO.value)
+    uno = crear_ubicacion("CL511")
+    dos = crear_ubicacion("CL512")
+    OrdenServicioService.replace_destinos(orden, [uno.id, dos.id])
+    # Sin el override, dos destinos irían por zona y esta puntual no aplicaría.
+    tarifa_por_ubicacion(tarifario, uno, "70000.00", ModalidadFlete.DIRECTO)
+
+    costo = CalcularCostoOrdenServicioUseCase.execute(orden.id)
+
+    assert costo.precio_flete == Decimal("70000.00")
+    assert costo.modalidad == ModalidadFlete.DIRECTO.value
+    assert costo.cantidad_destinos == 2
+
+
 def test_una_camara_ignora_los_destinos_explicitos(crear_orden, crear_ubicacion, transportista):
     orden = crear_orden(
         tipo_operacion=TipoOperacion.CAMARA.value, tipo_camion=TipoCamion.SEMI.value

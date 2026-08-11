@@ -9,7 +9,7 @@ from catalog.enums import TipoCamion
 from logistica.models import CostoOrdenServicio
 from shared.permisos import PermisoCodigo
 from tracking.services import RemitoService, TicketService
-from transportista.enums import TipoOperacion, Via
+from transportista.enums import ModalidadFlete, TipoOperacion, Via
 
 pytestmark = pytest.mark.django_db
 
@@ -95,7 +95,7 @@ def crear_remito(crear_ubicacion):
     return _crear
 
 
-def test_opciones_devuelve_los_tres_enums_completos(client, usuario_con):
+def test_opciones_devuelve_los_enums_completos(client, usuario_con):
     client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_VER))
 
     resp = client.get(OPCIONES)
@@ -105,6 +105,7 @@ def test_opciones_devuelve_los_tres_enums_completos(client, usuario_con):
     assert [o["value"] for o in body["tipos_operacion"]] == [t.value for t in TipoOperacion]
     assert [o["value"] for o in body["tipos_camion"]] == [t.value for t in TipoCamion]
     assert [o["value"] for o in body["vias"]] == [v.value for v in Via]
+    assert [o["value"] for o in body["modalidades"]] == [m.value for m in ModalidadFlete]
     assert body["tipos_camion"][0]["label"] == "Chasis"
 
 
@@ -200,6 +201,46 @@ def test_put_persiste_los_seis_campos(client, usuario_con, crear_orden):
     assert orden.hombreador is True
     assert orden.facturable is False
     assert orden.fecha_viaje.isoformat() == "2026-08-06T13:00:00+00:00"
+
+
+def test_put_persiste_el_override_de_modalidad(client, usuario_con, crear_orden):
+    orden = crear_orden()
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_EDITAR))
+
+    resp = client.put(
+        detalle(orden.id),
+        orden_in(modalidad=ModalidadFlete.MULTIPARADA.value),
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["modalidad"] == ModalidadFlete.MULTIPARADA.value
+    orden.refresh_from_db()
+    assert orden.modalidad == ModalidadFlete.MULTIPARADA.value
+
+
+def test_put_sin_modalidad_la_deja_en_automatico(client, usuario_con, crear_orden):
+    orden = crear_orden(modalidad=ModalidadFlete.DIRECTO.value)
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_EDITAR))
+
+    resp = client.put(detalle(orden.id), orden_in(), content_type="application/json")
+
+    assert resp.status_code == 200
+    assert resp.json()["modalidad"] is None
+    orden.refresh_from_db()
+    assert orden.modalidad is None
+
+
+def test_put_con_modalidad_invalida_da_payload_invalid(client, usuario_con, crear_orden):
+    orden = crear_orden()
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_EDITAR))
+
+    resp = client.put(
+        detalle(orden.id), orden_in(modalidad="expres"), content_type="application/json"
+    )
+
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "payload_invalid"
 
 
 def test_put_acepta_limpiar_fecha_viaje_y_tipo_camion(client, usuario_con, crear_orden):

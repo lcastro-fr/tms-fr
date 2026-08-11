@@ -18,6 +18,7 @@ class ActualizarOrdenServicioUseCase:
             tipo_operacion=data.tipo_operacion.value,
             tipo_camion=data.tipo_camion.value if data.tipo_camion else None,
             via=data.via.value,
+            modalidad=data.modalidad.value if data.modalidad else None,
             hombreador=data.hombreador,
             facturable=data.facturable,
         )
