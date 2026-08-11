@@ -38,7 +38,7 @@ hacia arriba.
 |---|---|---|---|
 | `catalog` | `Pais`, `Ubicacion`, `Zona` | zonas (CRUD) | Datos maestros y geo. Todos dependen de acá. |
 | `transportista` | `Transportista`, `Tarifario`, `TarifaFlete`, `ConceptoAdicional`, `TarifaConceptoAdicional` | tarifarios (CRUD) | Tarifarios con vigencia. El alta de transportistas y de conceptos sigue siendo sólo por admin. |
-| `logistica` | `OrdenServicio`, `CostoOrdenServicio` | órdenes de servicio (lectura y edición) | El use case del costo vive en `tracking`, no acá. |
+| `logistica` | `OrdenServicio`, `OrdenServicioDestino`, `CostoOrdenServicio` | órdenes de servicio (lectura y edición) | El use case del costo vive en `tracking`, no acá. |
 | `tracking` | `Ticket`, `Remito`, `RemitoDestino` | ingesta, costo de OS | La punta de entrada. |
 | `users` | `User` (login por email, `username = None`), `Permiso`, `Rol`, `UsuarioRol`, `RolPermiso` | auth (login/logout/me/csrf) | `AUTH_USER_MODEL` y el RBAC. La gestión de roles es sólo por admin. |
 
@@ -149,16 +149,44 @@ puede importar `tracking`**. `add_router` admite repetir prefijo mientras no sea
 `/opciones` no matchee la ruta de id.
 
 **La OS no tiene alta ni baja por API**, igual que ubicaciones: nace de la ingesta de SAP. El
-PUT toca sólo los seis campos que la ingesta no sabe llenar — `fecha_viaje`, `tipo_operacion`,
-`tipo_camion`, `via`, `hombreador`, `facturable` — y **no recalcula el costo**: el
+PUT toca sólo lo que la ingesta no sabe llenar — `fecha_viaje`, `tipo_operacion`, `tipo_camion`,
+`via`, `hombreador`, `facturable` y **`destinos`** — y **no recalcula el costo**: el
 `CostoOrdenServicioOut` que devuelve puede haber quedado viejo respecto de lo que se acaba de
 guardar. Recalcular es el POST, explícito, y la SPA bloquea el botón mientras el formulario esté
 sucio.
 
+**`OrdenServicioIn.destinos` es tri-estado y los tres estados importan.** `None` —el campo
+omitido— es "no tocar los destinos"; `[]` es "borralos, y que vuelvan a decidir los remitos"; una
+lista con filas los reemplaza enteros. Un `= []` pelado como default haría que cualquier PUT que
+no mande el campo borre los destinos **en silencio**, y ningún test lo notaría porque las OS de
+los fixtures no tienen ninguno.
+
+`OrdenServicioService.replace_destinos` copia a `TarifarioService.replace_hijos` —baja lógica más
+`bulk_create`, seguro por la unique parcial sobre `active=True`— y también **sus chequeos**: un
+`ubicacion_id` repetido o inexistente es 422 y no el `IntegrityError` de la unique o de la FK, que
+sería 500. Lo que agrega es un **early return cuando los ids que llegan ya son los vigentes**: el
+PUT es de objeto entero, así que cambiar `hombreador` reenvía los destinos, y sin eso cada
+guardado dejaría una generación muerta de filas. Los tarifarios se editan poco y no tienen ese
+problema; una OS se corrige todo el tiempo.
+
+**`costo_desactualizado` es un detector, no un certificado.** El PUT no recalcula, así que
+`CostoOrdenServicioService.esta_desactualizado` compara lo congelado en el costo contra lo vivo de
+la OS. `dias` queda afuera a propósito —leerlo pide `get_dias_permanencia`, que levanta si un
+ticket no tiene egreso, y no poder costear no puede impedir mostrar la OS— y la **cantidad de
+destinos sólo se compara cuando son explícitos**: con destinos derivados, `resolve_destinos`
+colapsa los extranjeros en un punto de salida y el crudo no dice cuántos se van a tarifar, así que
+compararlos daría falsos positivos. En la lista se compara sólo lo escalar, que sale gratis con
+los costos ya batcheados; contar destinos por fila pediría un aggregate más.
+
 `GET /ordenes-servicio/opciones` existe porque `tipo_operacion`, `tipo_camion` y `via` **son
 `StrEnum`, no tablas**. Sale de los `*_CHOICES` ya derivados al lado de cada enum, así que
 agregar un valor al enum lo publica solo. Es una sola operación con las tres listas y no tres
-endpoints: el formulario las necesita juntas.
+endpoints: el formulario las necesita juntas. Desde que la OS tiene destinos propios lleva además
+las **ubicaciones**, por lo mismo que `/tarifarios/opciones`: un request, y un usuario con
+`ordenes_servicio.editar` no necesita encima `ubicaciones.ver`. Van con `tipo` y
+`tiene_coordenadas` —anotado, para no traer la geometría de las ~1793 filas— porque elegir una
+ubicación sin punto hace fallar la tarifa por zona recién al apretar Calcular, y la pantalla lo
+avisa antes. Son ~181 KB en una query.
 
 `OrdenServicioOut` desnormaliza `origen_codigo`/`origen_nombre` y `transportista_razon_social`
 porque **no hay API de transportistas**: sin eso la tabla mostraría ids pelados. El costo vigente
@@ -489,9 +517,69 @@ al puerto por accidente.
 migration siembra lo que haya y `manage.py sync_paises` lo vuelve a materializar, así que
 completar la lista no pide migración.
 
+### Los destinos de la OS: explícitos, o derivados de los remitos
+
+**`RemitoDestino` y `OrdenServicioDestino` no son lo mismo, y ahí está toda la idea.** El primero
+es dato de SAP: a dónde va la carga según el remito. El segundo lo carga el usuario y dice **hasta
+dónde se factura el viaje**. Los dos coinciden casi siempre, pero no siempre: una exportación se
+factura hasta el puerto o el aeropuerto, y un viaje terrestre puede descargar en un **expreso**, un
+intermediario que no figura en ningún remito. Antes de que existiera la tabla, el destino a tarifar
+se *adivinaba* desde los remitos y eso no se podía expresar.
+
+`CalcularCostoOrdenServicioUseCase` resuelve así, y el orden importa:
+
+```python
+destinos = OrdenServicioService.list_destinos_ubicaciones(orden.id)
+if not destinos:
+    crudos = RemitoService.get_distinct_destinos(orden.id)
+    destinos = OrdenServicioService.resolve_destinos(orden, crudos)
+```
+
+Los explícitos ganan y se usan **tal cual**: sin chequeo de país y sin inyectar el punto de salida
+de la vía. Si el usuario pone una ubicación extranjera, se tarifa contra ella y el humano se hace
+cargo — rechazarla recrearía el agujero que `Via.TERRESTRE` deja abierto a propósito, porque esta
+tabla **es** el mecanismo per-OS para decidir por dónde sale una exportación terrestre. Por eso el
+DTO manda `pais` por destino: la pantalla lo muestra.
+
+**La derivación es el default, no un legado.** Se conservó en vez de reemplazarla porque una OS
+nace en `IngestTicketUseCase` cuando llega el camión, sin que nadie la haya mirado: con reemplazo
+total, toda OS ingestada quedaría sin poder costearse hasta que alguien tipee destinos, y el camino
+que ya funciona —100% nacional, el remito dice la verdad— se volvería carga manual por ticket. Y el
+backfill no tenía solución correcta: una data migration sólo puede copiar los destinos crudos, la
+resolución depende de `via`, y `via` arranca en `terrestre`; para las OS históricas con destino
+extranjero había que elegir entre escribir el destino crudo —que por el camino "verbatim" daría un
+**precio equivocado en silencio**— o hacer fallar la migración.
+
+**El detalle no resuelve, y no es un descuido.** `ObtenerOrdenServicioUseCase` expone
+`destinos_sugeridos` con los destinos **crudos** de los remitos, nunca el resultado de
+`resolve_destinos`. Si resolviera, una OS terrestre con destino extranjero —o con un destino sin
+país— haría que `GET /ordenes-servicio/{id}` respondiera 422: la OS se volvería imposible de abrir
+y por lo tanto de arreglar cargándole los destinos, que es justo lo que hay que hacerle. Es el mismo
+reparto que `dias_estadia` (devuelve `None`) contra `get_dias_permanencia` (levanta). Los sugeridos
+salen de deduplicar el resultado de `RemitoService.list_by_orden_servicio` que el use case ya trae
+—los modelos de Django hashean por pk— así que no cuestan ni una query extra ni un N+1 sobre `pais`.
+
+`origen_destinos` (`OrigenDestinos`: `explicitos` / `remitos` / `no_aplica`) viaja en el detalle
+para que nunca haya que adivinar con cuál de los dos conjuntos se va a costear. `no_aplica` es
+cámara, que ignora los destinos por completo: sin eso, alguien que cargue tres destinos en una OS
+de cámara los vería descartados sin explicación.
+
+**Nada ramifica sobre `tipo == expreso`.** Es data, igual que `destino_default`. Y la fila de
+destino no lleva un `rol` (`salida_pais` / `intermediario` / `final`): nada lo consumiría —la tarifa
+se resuelve por modalidad, tipo de camión, hombreador y zona/ubicación, nunca por un rol— y sería el
+tercer lugar codificando la misma idea. Tampoco lleva FK al remito que sirve: `tracking.models`
+importa `logistica.models`, así que eso sería un **ciclo de imports real**, no una objeción de
+estilo; si algún día hace falta imputación por remito, la tabla va en `tracking`.
+
+`secuencia` la asigna el service con `enumerate()` sobre el payload y **no la manda el cliente**,
+lo que elimina gratis toda una categoría de validación (huecos, duplicados, negativos). Con
+replace-all hoy es redundante —`order_by("id")` reproduce el orden— pero hace explícito un contrato
+de orden que si no queda apoyado en la monotonía del `BigAutoField`, y sobrevive al paso 4.
+
 ### El destino por defecto de una vía
 
-Un destino fuera de Argentina no se factura hasta la puerta sino hasta el punto de salida del
+Esto es lo que corre **sólo cuando la OS no tiene destinos explícitos**. Un destino fuera de
+Argentina no se factura hasta la puerta sino hasta el punto de salida del
 país, que sale de `OrdenServicio.via`. Qué ubicación es ese punto **no está en el código**:
 `Ubicacion.destino_default` la marca, con una unique parcial (`uq_ubicacion_destino_default`)
 que garantiza una sola activa por clave. Cambiar el puerto es editar una fila del admin, no
@@ -509,6 +597,10 @@ revés. El use case compone `RemitoService.get_distinct_destinos` con él. Se ca
 caliente, sin cache**: cambiar la vía cambia el destino en el siguiente cálculo. Y deduplica,
 así que tres destinos extranjeros colapsan en un solo punto de salida — eso mueve la modalidad
 de multiparada a directo, y `cantidad_destinos` cuenta los resueltos, que es lo que se tarifó.
+
+Cargar destinos explícitos **no lo pisa ni lo apaga**: la función queda igual y sigue siendo el
+camino por default. Es la razón de que los once tests de `test_resolve_destinos.py` no se hayan
+tocado al agregar la tabla.
 
 `Zona.geom` es `PolygonField`, **no MultiPolygon**: una zona es exactamente un polígono, con
 sus anillos interiores si hace falta. Un anillo abierto no se cierra solo — muere en GEOS
@@ -600,7 +692,8 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
   más; hasta que se complete la lista, cualquier destino extranjero de SAP cae en
   `destinos_sin_pais` y su OS no se puede costear.
 - **Los tests son los de auth/RBAC (`conftest.py` + `users/tests/`), los de catalog, los de
-  `logistica/tests/` (resolución de destinos por vía, costeo y la API de órdenes de servicio),
+  `logistica/tests/` (resolución de destinos por vía, destinos explícitos de la OS, costeo y la
+  API de órdenes de servicio),
   los de `transportista/tests/` (la API de tarifarios: alta con hijos, XOR, duplicados,
   solapamiento, el bloqueo por "en uso" y el filtro de vencidos) y los de la geolocalización de
   la ingesta** (`tracking/tests/`, con un `Geocoder` falso inyectado
@@ -623,6 +716,17 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
 - **Transportistas y conceptos adicionales son de sólo lectura por API.** Salen embebidos en
   `GET /tarifarios/opciones` para poblar el formulario, pero su alta, edición y baja siguen
   siendo del admin. Cargar un transportista nuevo es, hoy, un paso previo manual al tarifario.
+- **Una ubicación `expreso` se da de alta sólo por el admin.** No hay `POST /ubicaciones/` —nacen
+  de la ingesta de SAP— así que el expreso al que se le va a facturar hay que cargarlo a mano antes
+  de poder elegirlo como destino, igual que un transportista. Son pocos y estables, pero es un paso
+  previo manual y no hay nada en la UI que lo diga.
+- **El costo no congela *qué* destinos se tarifaron, sólo cuántos.** `CostoOrdenServicio` guarda
+  `cantidad_destinos` y no la lista, así que un swap de destino con el mismo count no lo detecta
+  `esta_desactualizado` —incluido un cambio de `via` que mueve puerto↔aeropuerto, porque `via`
+  tampoco está congelada—. La versión exacta es un snapshot de las ubicaciones costeadas, y tiene
+  que ser **texto desnormalizado, nunca FKs con `PROTECT`**: eso le pondría a los destinos de la OS
+  el mismo candado que tiene un tarifario en uso, y `replace_destinos` empezaría a tirar
+  `ProtectedError` en cualquier OS ya costeada. Se difiere hasta que alguien discuta una factura.
 - **La búsqueda por `numero` no dice cuál de los dos matcheó.** Si el texto coincide con un
   remito y no con el ticket, la fila igual aparece y en la columna Ticket se ve otro número.
   Devolver el motivo del match pediría cambiar el DTO de la lista.

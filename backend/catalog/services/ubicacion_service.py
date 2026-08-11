@@ -4,6 +4,7 @@ from typing import Any
 
 from django.contrib.gis.geos import Point
 from django.db import transaction
+from django.db.models import Q
 
 from catalog.enums import SRID_WGS84, DestinoDefault, TipoUbicacion
 from catalog.models import Pais, Ubicacion
@@ -36,8 +37,13 @@ class UbicacionService:
 
     @staticmethod
     def list_ubicaciones_para_opciones() -> list[Ubicacion]:
-        """Sin coordinates ni dirección: son ~1785 filas y acá sólo se pobla un <Select>."""
-        return list(Ubicacion.objects.only("id", "codigo", "nombre").order_by("nombre"))
+        """Sin dirección y con `tiene_coordenadas` anotado para no traer la geometría."""
+        return list(
+            Ubicacion.objects.only("id", "codigo", "nombre", "tipo", "localidad", "provincia", "pais")
+            .select_related("pais")
+            .annotate(tiene_coordenadas=Q(coordinates__isnull=False))
+            .order_by("nombre")
+        )
 
     @staticmethod
     def get_ubicacion(ubicacion_id: int) -> Ubicacion | None:

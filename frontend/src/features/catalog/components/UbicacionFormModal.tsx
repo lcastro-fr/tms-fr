@@ -35,6 +35,7 @@ const TIPOS: { value: TipoUbicacion; label: string }[] = [
     { value: "puerto", label: "Puerto" },
     { value: "aeropuerto", label: "Aeropuerto" },
     { value: "cliente", label: "Cliente" },
+    { value: "expreso", label: "Expreso" },
     { value: "otro", label: "Otro" },
 ];
 

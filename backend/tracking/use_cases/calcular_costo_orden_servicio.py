@@ -55,8 +55,11 @@ class CalcularCostoOrdenServicioUseCase:
             modalidad = None
             destinos = []
         else:
-            crudos = RemitoService.get_distinct_destinos(orden.id)
-            destinos = OrdenServicioService.resolve_destinos(orden, crudos)
+            # Los explícitos se usan tal cual; sin ellos se derivan de los remitos.
+            destinos = OrdenServicioService.list_destinos_ubicaciones(orden.id)
+            if not destinos:
+                crudos = RemitoService.get_distinct_destinos(orden.id)
+                destinos = OrdenServicioService.resolve_destinos(orden, crudos)
             tarifa_flete = TarifarioService.resolve_tarifa_flete(
                 tarifario, destinos, orden.tipo_camion, orden.hombreador
             )

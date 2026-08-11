@@ -5,12 +5,14 @@ from typing import TYPE_CHECKING, Self
 
 from pydantic import AwareDatetime, BaseModel
 
+from catalog.dtos import UbicacionOpcionOut
 from catalog.enums import TipoCamion
 from logistica.dtos.costo_dtos import CostoOrdenServicioOut
 from shared.dtos import OpcionOut
 from transportista.enums import TipoOperacion, Via
 
 if TYPE_CHECKING:
+    from catalog.models import Ubicacion
     from logistica.models import CostoOrdenServicio, OrdenServicio
     from tracking.models import Remito, RemitoDestino, Ticket
 
@@ -19,6 +21,7 @@ class OrdenServicioOpcionesOut(BaseModel):
     tipos_operacion: list[OpcionOut]
     tipos_camion: list[OpcionOut]
     vias: list[OpcionOut]
+    ubicaciones: list[UbicacionOpcionOut]
 
     @classmethod
     def from_choices(
@@ -26,12 +29,18 @@ class OrdenServicioOpcionesOut(BaseModel):
         tipos_operacion: list[tuple[str, str]],
         tipos_camion: list[tuple[str, str]],
         vias: list[tuple[str, str]],
+        ubicaciones: list[Ubicacion],
     ) -> OrdenServicioOpcionesOut:
         return cls(
             tipos_operacion=OpcionOut.desde_choices(tipos_operacion),
             tipos_camion=OpcionOut.desde_choices(tipos_camion),
             vias=OpcionOut.desde_choices(vias),
+            ubicaciones=[UbicacionOpcionOut.from_model(u) for u in ubicaciones],
         )
+
+
+class OrdenServicioDestinoIn(BaseModel):
+    ubicacion_id: int
 
 
 class OrdenServicioIn(BaseModel):
@@ -41,6 +50,7 @@ class OrdenServicioIn(BaseModel):
     via: Via
     hombreador: bool = False
     facturable: bool = False
+    destinos: list[OrdenServicioDestinoIn] | None = None
 
 
 class OrdenesServicioFilters(BaseModel):
@@ -91,6 +101,30 @@ class RemitoDestinoOut(BaseModel):
         )
 
 
+class OrdenServicioDestinoOut(BaseModel):
+    """Sirve para los destinos explícitos y para los sugeridos por los remitos."""
+
+    ubicacion_id: int
+    codigo: str | None
+    nombre: str
+    tipo: str
+    pais: str | None
+    tiene_coordenadas: bool
+    secuencia: int
+
+    @classmethod
+    def from_ubicacion(cls, ubicacion: Ubicacion, secuencia: int) -> OrdenServicioDestinoOut:
+        return cls(
+            ubicacion_id=ubicacion.id,
+            codigo=ubicacion.codigo,
+            nombre=ubicacion.nombre,
+            tipo=ubicacion.tipo,
+            pais=ubicacion.pais.nombre if ubicacion.pais else None,
+            tiene_coordenadas=ubicacion.coordinates is not None,
+            secuencia=secuencia,
+        )
+
+
 class RemitoOut(BaseModel):
     id: int
     numero: str
@@ -123,6 +157,7 @@ class OrdenServicioOut(BaseModel):
     active: bool
     costo: CostoOrdenServicioOut | None = None
     tickets: list[TicketOut] = []
+    costo_desactualizado: bool = False
 
     # Devuelve Self y acepta **extra para que la subclase de detalle reuse este mapeo.
     @classmethod
@@ -131,6 +166,7 @@ class OrdenServicioOut(BaseModel):
         orden: OrdenServicio,
         costo: CostoOrdenServicio | None = None,
         tickets: list[TicketOut] | None = None,
+        costo_desactualizado: bool = False,
         **extra,
     ) -> Self:
         return cls(
@@ -149,6 +185,7 @@ class OrdenServicioOut(BaseModel):
             active=orden.active,
             costo=CostoOrdenServicioOut.from_model(costo) if costo else None,
             tickets=tickets or [],
+            costo_desactualizado=costo_desactualizado,
             **extra,
         )
 
@@ -160,6 +197,9 @@ class OrdenServicioDetalleOut(OrdenServicioOut):
     """
 
     remitos: list[RemitoOut] = []
+    destinos: list[OrdenServicioDestinoOut] = []
+    destinos_sugeridos: list[OrdenServicioDestinoOut] = []
+    origen_destinos: str
 
     @classmethod
     def from_model(
@@ -167,13 +207,26 @@ class OrdenServicioDetalleOut(OrdenServicioOut):
         orden: OrdenServicio,
         costo: CostoOrdenServicio | None = None,
         tickets: list[TicketOut] | None = None,
+        costo_desactualizado: bool = False,
         remitos: list[tuple[Remito, list[RemitoDestino]]] | None = None,
+        destinos: list[Ubicacion] | None = None,
+        destinos_sugeridos: list[Ubicacion] | None = None,
+        origen_destinos: str = "",
         **extra,
     ) -> Self:
         return super().from_model(
             orden,
             costo,
             tickets,
-            remitos=[RemitoOut.from_model(r, destinos) for r, destinos in remitos or []],
+            costo_desactualizado,
+            remitos=[RemitoOut.from_model(r, destinos_) for r, destinos_ in remitos or []],
+            destinos=[
+                OrdenServicioDestinoOut.from_ubicacion(u, i) for i, u in enumerate(destinos or [])
+            ],
+            destinos_sugeridos=[
+                OrdenServicioDestinoOut.from_ubicacion(u, i)
+                for i, u in enumerate(destinos_sugeridos or [])
+            ],
+            origen_destinos=origen_destinos,
             **extra,
         )

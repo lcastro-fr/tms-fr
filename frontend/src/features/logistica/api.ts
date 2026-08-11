@@ -17,6 +17,11 @@ export type OrdenServicioDetalleOut =
 export type TicketOut = components["schemas"]["TicketOut"];
 export type RemitoOut = components["schemas"]["RemitoOut"];
 export type RemitoDestinoOut = components["schemas"]["RemitoDestinoOut"];
+export type OrdenServicioDestinoIn =
+    components["schemas"]["OrdenServicioDestinoIn"];
+export type OrdenServicioDestinoOut =
+    components["schemas"]["OrdenServicioDestinoOut"];
+export type UbicacionOpcionOut = components["schemas"]["UbicacionOpcionOut"];
 
 // Más angosta que el DTO a propósito: un null en el search viaja como el string "null"
 // y además duplica la entrada de cache. Las fechas van como "YYYY-MM-DD".

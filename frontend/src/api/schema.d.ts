@@ -509,6 +509,27 @@ export interface components {
             tipos_camion: components["schemas"]["OpcionOut"][];
             /** Vias */
             vias: components["schemas"]["OpcionOut"][];
+            /** Ubicaciones */
+            ubicaciones: components["schemas"]["UbicacionOpcionOut"][];
+        };
+        /** UbicacionOpcionOut */
+        UbicacionOpcionOut: {
+            /** Id */
+            id: number;
+            /** Codigo */
+            codigo: string | null;
+            /** Nombre */
+            nombre: string;
+            /** Tipo */
+            tipo: string;
+            /** Localidad */
+            localidad: string | null;
+            /** Provincia */
+            provincia: string | null;
+            /** Pais */
+            pais: string | null;
+            /** Tiene Coordenadas */
+            tiene_coordenadas: boolean;
         };
         /** OrdenesServicioFilters */
         OrdenesServicioFilters: {
@@ -559,6 +580,11 @@ export interface components {
              * @default []
              */
             tickets: components["schemas"]["TicketOut"][];
+            /**
+             * Costo Desactualizado
+             * @default false
+             */
+            costo_desactualizado: boolean;
         };
         /** TicketOut */
         TicketOut: {
@@ -579,6 +605,26 @@ export interface components {
             fecha_egreso: string | null;
             /** Dias Estadia */
             dias_estadia: number | null;
+        };
+        /**
+         * OrdenServicioDestinoOut
+         * @description Sirve para los destinos explícitos y para los sugeridos por los remitos.
+         */
+        OrdenServicioDestinoOut: {
+            /** Ubicacion Id */
+            ubicacion_id: number;
+            /** Codigo */
+            codigo: string | null;
+            /** Nombre */
+            nombre: string;
+            /** Tipo */
+            tipo: string;
+            /** Pais */
+            pais: string | null;
+            /** Tiene Coordenadas */
+            tiene_coordenadas: boolean;
+            /** Secuencia */
+            secuencia: number;
         };
         /**
          * OrdenServicioDetalleOut
@@ -619,10 +665,27 @@ export interface components {
              */
             tickets: components["schemas"]["TicketOut"][];
             /**
+             * Costo Desactualizado
+             * @default false
+             */
+            costo_desactualizado: boolean;
+            /**
              * Remitos
              * @default []
              */
             remitos: components["schemas"]["RemitoOut"][];
+            /**
+             * Destinos
+             * @default []
+             */
+            destinos: components["schemas"]["OrdenServicioDestinoOut"][];
+            /**
+             * Destinos Sugeridos
+             * @default []
+             */
+            destinos_sugeridos: components["schemas"]["OrdenServicioDestinoOut"][];
+            /** Origen Destinos */
+            origen_destinos: string;
         };
         /** RemitoDestinoOut */
         RemitoDestinoOut: {
@@ -646,6 +709,11 @@ export interface components {
             /** Destinos */
             destinos: components["schemas"]["RemitoDestinoOut"][];
         };
+        /** OrdenServicioDestinoIn */
+        OrdenServicioDestinoIn: {
+            /** Ubicacion Id */
+            ubicacion_id: number;
+        };
         /** OrdenServicioIn */
         OrdenServicioIn: {
             /** Fecha Viaje */
@@ -663,6 +731,8 @@ export interface components {
              * @default false
              */
             facturable: boolean;
+            /** Destinos */
+            destinos?: components["schemas"]["OrdenServicioDestinoIn"][] | null;
         };
         /**
          * TipoCamion
@@ -754,7 +824,7 @@ export interface components {
          * TipoUbicacion
          * @enum {string}
          */
-        TipoUbicacion: "planta" | "puerto" | "aeropuerto" | "cliente" | "otro";
+        TipoUbicacion: "planta" | "puerto" | "aeropuerto" | "cliente" | "expreso" | "otro";
         /** UbicacionIn */
         UbicacionIn: {
             /** Nombre */
@@ -804,15 +874,6 @@ export interface components {
             cuit: string;
             /** Razon Social */
             razon_social: string;
-        };
-        /** UbicacionOpcionOut */
-        UbicacionOpcionOut: {
-            /** Id */
-            id: number;
-            /** Codigo */
-            codigo: string | null;
-            /** Nombre */
-            nombre: string;
         };
         /** ZonaOpcionOut */
         ZonaOpcionOut: {

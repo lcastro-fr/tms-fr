@@ -27,6 +27,9 @@ class ListarOrdenesServicioUseCase:
                     TicketOut.from_model(t, TicketService.dias_estadia(t))
                     for t in tickets.get(orden.id, [])
                 ],
+                costo_desactualizado=CostoOrdenServicioService.esta_desactualizado(
+                    costos.get(orden.id), orden
+                ),
             )
             for orden in ordenes
         ]

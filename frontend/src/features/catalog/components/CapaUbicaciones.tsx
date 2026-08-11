@@ -10,6 +10,7 @@ const COLOR_POR_TIPO: Record<string, string> = {
     puerto: "#1971c2",
     aeropuerto: "#6741d9",
     cliente: "#0c8599",
+    expreso: "#f08c00",
     otro: "#868e96",
 };
 

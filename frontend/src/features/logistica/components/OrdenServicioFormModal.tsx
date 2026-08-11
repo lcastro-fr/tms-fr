@@ -23,7 +23,7 @@ import {
 import { useState } from "react";
 
 import { ApiError, fieldErrors } from "../../../api/errors";
-import { aIsoConOffset, aWallClock, formatearFecha } from "../../../lib/date";
+import { formatearFecha } from "../../../lib/date";
 import { formatearPesos } from "../../../lib/money";
 import { Can, usePermisos } from "../../auth";
 import {
@@ -35,24 +35,21 @@ import {
 } from "../api";
 import type {
     CostoOrdenServicioOut,
-    OrdenServicioIn,
     OrdenServicioOut,
     RemitoOut,
 } from "../api";
+import { FilasDestinoOrden } from "./FilasDestinoOrden";
 import { TicketsDeOrden } from "./TicketsDeOrden";
+import type { Valores } from "./valores-orden-servicio";
+import {
+    aFilasDestino,
+    aPayload,
+    valoresIniciales,
+} from "./valores-orden-servicio";
 
 type Props = {
     orden: OrdenServicioOut;
     onClose: () => void;
-};
-
-type Valores = {
-    fecha_viaje: string | null;
-    tipo_operacion: OrdenServicioIn["tipo_operacion"];
-    tipo_camion: OrdenServicioIn["tipo_camion"];
-    via: OrdenServicioIn["via"];
-    hombreador: boolean;
-    facturable: boolean;
 };
 
 export function OrdenServicioFormModal({ orden, onClose }: Props) {
@@ -71,25 +68,12 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
     );
 
     const form = useForm<Valores>({
-        initialValues: {
-            fecha_viaje: aWallClock(detalle.fecha_viaje),
-            tipo_operacion: detalle.tipo_operacion as Valores["tipo_operacion"],
-            tipo_camion:
-                (detalle.tipo_camion as Valores["tipo_camion"]) ?? null,
-            via: detalle.via as Valores["via"],
-            hombreador: detalle.hombreador,
-            facturable: detalle.facturable,
-        },
+        initialValues: valoresIniciales(detalle),
     });
 
     const guardar = useMutation({
-        mutationFn: (valores: Valores) => {
-            const payload: OrdenServicioIn = {
-                ...valores,
-                fecha_viaje: aIsoConOffset(valores.fecha_viaje),
-            };
-            return actualizarOrdenServicio(orden.id, payload);
-        },
+        mutationFn: (valores: Valores) =>
+            actualizarOrdenServicio(orden.id, aPayload(valores)),
         onSuccess: (guardada) => {
             void queryClient.invalidateQueries({
                 queryKey: ordenesServicioKeys.all,
@@ -154,6 +138,8 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
     // Calcular con el form sucio costearía el estado viejo del servidor y mostraría
     // un número que no se corresponde con lo que hay en pantalla.
     const sucio = form.isDirty();
+    const esCamara = form.values.tipo_operacion === "camara";
+    const costoViejo = detalle.costo_desactualizado && costo === detalle.costo;
 
     return (
         <Modal
@@ -239,6 +225,41 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
                         </Stack>
                     </Fieldset>
 
+                    <Fieldset
+                        legend={`Destinos a facturar (${form.values.destinos.length})`}
+                    >
+                        <Stack gap="sm">
+                            <FilasDestinoOrden
+                                form={form}
+                                ubicaciones={opciones.ubicaciones}
+                                disabled={!puedeEditar || esCamara}
+                            />
+
+                            {puedeEditar &&
+                                !esCamara &&
+                                detalle.destinos_sugeridos.length > 0 && (
+                                    <Group>
+                                        <Button
+                                            size="xs"
+                                            variant="subtle"
+                                            onClick={() =>
+                                                form.setFieldValue(
+                                                    "destinos",
+                                                    aFilasDestino(
+                                                        detalle.destinos_sugeridos,
+                                                    ),
+                                                )
+                                            }
+                                        >
+                                            Reemplazar por los destinos de los
+                                            remitos (
+                                            {detalle.destinos_sugeridos.length})
+                                        </Button>
+                                    </Group>
+                                )}
+                        </Stack>
+                    </Fieldset>
+
                     <Fieldset legend={`Tickets (${detalle.tickets.length})`}>
                         <TicketsDeOrden tickets={detalle.tickets} />
                     </Fieldset>
@@ -247,13 +268,16 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
                         {detalle.remitos.length > 0 ? (
                             <Stack gap="xs">
                                 {detalle.remitos.map((remito) => (
-                                    <FilaRemito key={remito.id} remito={remito} />
+                                    <FilaRemito
+                                        key={remito.id}
+                                        remito={remito}
+                                    />
                                 ))}
                             </Stack>
                         ) : (
                             <Text c="dimmed" size="sm">
-                                Sin remitos asociados. Sin destinos no se puede resolver
-                                la tarifa de flete.
+                                Sin remitos asociados. Sin destinos no se puede
+                                resolver la tarifa de flete.
                             </Text>
                         )}
                     </Fieldset>
@@ -291,6 +315,16 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
                                 <Text c="dimmed" size="sm">
                                     Esta orden todavía no tiene costo calculado.
                                 </Text>
+                            )}
+
+                            {costoViejo && (
+                                <Alert
+                                    color="orange"
+                                    title="El costo guardado quedó viejo"
+                                >
+                                    Los datos de la OS cambiaron después del
+                                    último cálculo. Recalculá para actualizarlo.
+                                </Alert>
                             )}
 
                             <Group justify="space-between">

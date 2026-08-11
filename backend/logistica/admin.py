@@ -1,10 +1,26 @@
 from django.contrib import admin
 
-from logistica.models import CostoOrdenServicio, OrdenServicio
+from logistica.models import CostoOrdenServicio, OrdenServicio, OrdenServicioDestino
+
+
+class OrdenServicioDestinoInline(admin.TabularInline):
+    model = OrdenServicioDestino
+    extra = 0
+    fields = ("ubicacion", "secuencia", "active")
+    autocomplete_fields = ("ubicacion",)
+
+
+@admin.register(OrdenServicioDestino)
+class OrdenServicioDestinoAdmin(admin.ModelAdmin):
+    list_display = ("orden_servicio", "ubicacion", "secuencia", "active")
+    list_filter = ("active",)
+    autocomplete_fields = ("orden_servicio", "ubicacion")
 
 
 @admin.register(OrdenServicio)
 class OrdenServicioAdmin(admin.ModelAdmin):
+    inlines = (OrdenServicioDestinoInline,)
+    search_fields = ("=id",)
     list_display = (
         "id",
         "origen",

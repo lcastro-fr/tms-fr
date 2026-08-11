@@ -18,13 +18,17 @@ Cuatro pasos, en orden. No adelantarse a los siguientes.
    Un ticket se crea cuando el camión llega. Los precios contra los que se costea se cargan
    desde `/tarifarios`, la única pantalla con alta propia: un tarifario se guarda entero
    —vigencia, tarifas de flete y conceptos adicionales— en un solo formulario.
+   **Hasta dónde se factura el viaje ya no se deduce de los remitos:** la OS tiene sus propios
+   destinos, que el usuario carga en `/ordenes-servicio` y el costeo usa tal cual. Es lo que
+   permite facturar hasta un puerto, un aeropuerto o un **expreso** cuando el remito dice otra
+   cosa. Sin destinos cargados se siguen derivando de los remitos, que es el caso mayoritario.
 2. **Eventos.** Registrar los eventos de cada ticket y calcular cuánto duró cada uno.
 3. **Orden de servicio.** Planificar la OS *antes* de que llegue el camión. Hoy
    `IngestTicketUseCase` crea una OS nueva por ticket; en este paso el ticket tiene que
    poder colgarse de una OS preexistente. La pantalla `/ordenes-servicio` ya deja corregir a
    mano lo que la ingesta no sabe llenar (`fecha_viaje`, `tipo_operacion`, `tipo_camion`, `via`,
-   `hombreador`, `facturable`) y disparar el costeo, pero **la OS sigue naciendo del ticket**:
-   no hay alta, ni `numero`, ni estado, ni fechas planificadas.
+   `hombreador`, `facturable`, `destinos`) y disparar el costeo, pero **la OS sigue naciendo del
+   ticket**: no hay alta, ni `numero`, ni estado, ni fechas planificadas.
 4. **Ruteo.** Optimización logística con OpenRouteService (`lat`/`lng` ya están en
    `Ubicacion`).
 
@@ -39,12 +43,20 @@ endpoints que existen; si falta el endpoint, el trabajo es en `backend/`.
 ## Layout
 
 ```
-backend/     Django. Ver backend/CLAUDE.md
-frontend/    SPA React. Ver frontend/CLAUDE.md
-nginx/       nginx.conf del proxy. Es lo que hace que todo sea same-origin.
-seed/        xlsx de datos reales para los import_* commands
-.env         en la raíz, porque compose lo necesita acá para interpolar
+backend/          Django. Ver backend/CLAUDE.md
+frontend/         SPA React. Ver frontend/CLAUDE.md
+nginx/            nginx.conf del proxy. Es lo que hace que todo sea same-origin.
+seed/             xlsx de datos reales para los import_* commands
+scripts/          utilitarios sueltos de datos
+run-dev.sh        levanta el stack exportando DOCKER_UID/GID
+generar-tipos.sh  regenera frontend/src/api/schema.d.ts desde el openapi.json
+.env              en la raíz, porque compose lo necesita acá para interpolar
 ```
+
+Los dos `.sh` de la raíz van con `docker compose`, o sea que se corren **en el host**, no
+adentro de un contenedor. `generar-tipos.sh` está explicado en `frontend/CLAUDE.md`: es un
+script y no un one-liner porque el `Host` que acepta Django, el Node que corre
+`openapi-typescript` y el filesystem que ve el contenedor no coinciden.
 
 ## Topología
 

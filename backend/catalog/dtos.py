@@ -64,6 +64,31 @@ class UbicacionesFilters(BaseModel):
     con_coordenadas: bool | None = None
 
 
+class UbicacionOpcionOut(BaseModel):
+
+    id: int
+    codigo: str | None
+    nombre: str
+    tipo: str
+    localidad: str | None
+    provincia : str | None
+    pais: str | None
+    tiene_coordenadas: bool
+
+    @classmethod
+    def from_model(cls, ubicacion: Ubicacion) -> UbicacionOpcionOut:
+        return cls(
+            id=ubicacion.id,
+            codigo=ubicacion.codigo,
+            nombre=ubicacion.nombre,
+            tipo=ubicacion.tipo,
+            localidad=ubicacion.localidad,
+            provincia=ubicacion.provincia,
+            pais=ubicacion.pais.nombre,
+            tiene_coordenadas=ubicacion.tiene_coordenadas,  # type: ignore[attr-defined]
+        )
+
+
 class UbicacionOut(BaseModel):
     id: int
     tipo: str

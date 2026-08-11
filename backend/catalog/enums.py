@@ -17,6 +17,7 @@ class TipoUbicacion(StrEnum):
     PUERTO = "puerto"
     AEROPUERTO = "aeropuerto"
     CLIENTE = "cliente"
+    EXPRESO = "expreso"
     OTRO = "otro"
 
 

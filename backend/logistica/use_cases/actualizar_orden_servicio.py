@@ -21,9 +21,17 @@ class ActualizarOrdenServicioUseCase:
             hombreador=data.hombreador,
             facturable=data.facturable,
         )
+        if data.destinos is not None:
+            OrdenServicioService.replace_destinos(orden, [d.ubicacion_id for d in data.destinos])
+
+        destinos = OrdenServicioService.list_destinos(orden.id)
         tickets = TicketService.list_by_ordenes_servicio([orden.id]).get(orden.id, [])
+        costo = CostoOrdenServicioService.get_costo_vigente(orden.id)
         return OrdenServicioOut.from_model(
             orden,
-            costo=CostoOrdenServicioService.get_costo_vigente(orden.id),
+            costo=costo,
             tickets=[TicketOut.from_model(t, TicketService.dias_estadia(t)) for t in tickets],
+            costo_desactualizado=CostoOrdenServicioService.esta_desactualizado(
+                costo, orden, len(destinos) if destinos else None
+            ),
         )

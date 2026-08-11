@@ -4,14 +4,14 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 
 from catalog.enums import PAIS_LOCAL
 from catalog.models import Ubicacion
 from catalog.services import UbicacionService
 from logistica.enums import DESTINO_DEFAULT_POR_VIA
-from logistica.models import OrdenServicio
+from logistica.models import OrdenServicio, OrdenServicioDestino
 from shared.exceptions import BusinessRuleError, NotFoundError
 from transportista.enums import TipoOperacion, Via
 
@@ -24,6 +24,12 @@ class OrdenServicioService:
         pass
 
     class ViaSinDestinoDefaultError(BusinessRuleError):
+        pass
+
+    class DestinoDuplicadoError(BusinessRuleError):
+        pass
+
+    class DestinoInexistenteError(BusinessRuleError):
         pass
 
     @staticmethod
@@ -134,6 +140,69 @@ class OrdenServicioService:
                 ]
             )
         return orden_servicio
+
+    @staticmethod
+    def list_destinos(orden_servicio_id: int) -> list[OrdenServicioDestino]:
+        return list(
+            OrdenServicioDestino.objects.filter(orden_servicio_id=orden_servicio_id)
+            .select_related("ubicacion", "ubicacion__pais")
+            .order_by("secuencia", "id")
+        )
+
+    @staticmethod
+    def list_destinos_ubicaciones(orden_servicio_id: int) -> list[Ubicacion]:
+        return [d.ubicacion for d in OrdenServicioService.list_destinos(orden_servicio_id)]
+
+    @staticmethod
+    def _check_destinos(ubicacion_ids: list[int]) -> None:
+        vistos: set[int] = set()
+        for indice, ubicacion_id in enumerate(ubicacion_ids):
+            if ubicacion_id in vistos:
+                raise OrdenServicioService.DestinoDuplicadoError(
+                    f"El destino de la fila #{indice + 1} está cargado más de una vez",
+                    detail={"coleccion": "destinos", "indice": indice},
+                )
+            vistos.add(ubicacion_id)
+
+        if not vistos:
+            return
+        existentes = set(Ubicacion.objects.filter(pk__in=vistos).values_list("pk", flat=True))
+        faltantes = sorted(vistos - existentes)
+        if faltantes:
+            raise OrdenServicioService.DestinoInexistenteError(
+                f"No existen estas ubicaciones: {faltantes}",
+                detail={"campo": "ubicacion_id", "ids": faltantes},
+            )
+
+    @staticmethod
+    def replace_destinos(orden_servicio: OrdenServicio, ubicacion_ids: list[int]) -> None:
+        """
+        Deja la OS exactamente con los destinos que llegan.
+        """
+        OrdenServicioService._check_destinos(ubicacion_ids)
+
+        vigentes = [d.ubicacion_id for d in OrdenServicioService.list_destinos(orden_servicio.id)]
+        if vigentes == ubicacion_ids:
+            return
+
+        try:
+            with transaction.atomic():
+                OrdenServicioDestino.objects.filter(orden_servicio=orden_servicio).delete()
+                OrdenServicioDestino.objects.bulk_create(
+                    [
+                        OrdenServicioDestino(
+                            orden_servicio=orden_servicio,
+                            ubicacion_id=ubicacion_id,
+                            secuencia=secuencia,
+                        )
+                        for secuencia, ubicacion_id in enumerate(ubicacion_ids)
+                    ]
+                )
+        except IntegrityError as exc:
+            raise OrdenServicioService.DestinoDuplicadoError(
+                "Hay destinos repetidos en la orden de servicio",
+                detail={"orden_servicio_id": orden_servicio.id},
+            ) from exc
 
     @staticmethod
     def _etiqueta(ubicacion: Ubicacion) -> str:

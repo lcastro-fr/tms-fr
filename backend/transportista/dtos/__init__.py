@@ -1,3 +1,5 @@
+from catalog.dtos import UbicacionOpcionOut
+
 from .tarifario_dtos import (
     CerrarTarifarioIn,
     ConceptoAdicionalOut,
@@ -11,7 +13,6 @@ from .tarifario_dtos import (
     TarifarioOut,
     TarifariosFilters,
     TransportistaOpcionOut,
-    UbicacionOpcionOut,
     ZonaOpcionOut,
 )
 from .transportista_dtos import TransportistaIn, TransportistaOut

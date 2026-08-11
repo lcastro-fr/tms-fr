@@ -5,12 +5,13 @@ from typing import TYPE_CHECKING, Annotated, Self
 
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
+from catalog.dtos import UbicacionOpcionOut
 from catalog.enums import TipoCamion
 from shared.dtos import OpcionOut
 from transportista.enums import ModalidadFlete
 
 if TYPE_CHECKING:
-    from catalog.models import Ubicacion, Zona
+    from catalog.models import Zona
     from transportista.models import (
         ConceptoAdicional,
         TarifaConceptoAdicional,
@@ -212,16 +213,6 @@ class ZonaOpcionOut(BaseModel):
     @classmethod
     def from_model(cls, zona: Zona) -> ZonaOpcionOut:
         return cls(id=zona.id, nombre=zona.nombre)
-
-
-class UbicacionOpcionOut(BaseModel):
-    id: int
-    codigo: str | None
-    nombre: str
-
-    @classmethod
-    def from_model(cls, ubicacion: Ubicacion) -> UbicacionOpcionOut:
-        return cls(id=ubicacion.id, codigo=ubicacion.codigo, nombre=ubicacion.nombre)
 
 
 class TarifarioOpcionesOut(BaseModel):

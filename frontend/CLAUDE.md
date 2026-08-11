@@ -399,11 +399,29 @@ imagen es `vite --host` y no `pnpm dev`; está explicado en `../CLAUDE.md`). El
 `node_modules` es un volumen anónimo armado en el build, así que **agregar una dependencia
 pide `docker compose build web`**.
 
-Regenerar los tipos de la API, con el backend levantado:
+Regenerar los tipos de la API, con el stack levantado, **desde la raíz del repo**:
 
 ```bash
-pnpm dlx openapi-typescript http://localhost/api/v1/openapi.json -o src/api/schema.d.ts
+./generar-tipos.sh
 ```
+
+No es un one-liner y por eso es un script. Tres restricciones que cualquier versión a mano
+tiene que respetar igual:
+
+- **El JSON se baja por el proxy, no de `api:8000`.** `ALLOWED_HOSTS` es
+  `localhost,127.0.0.1`, así que Django responde **400** a cualquier otro `Host`.
+- **`openapi-typescript` corre adentro del contenedor `web`.** Ya es devDependency, así que
+  se llama el binario de `node_modules/.bin` y no hace falta `pnpm dlx`. El Node del host
+  puede ser más viejo que lo que pide Vite.
+- **El contenedor no puede bajarlo él mismo** —para él `localhost` es él mismo— así que el
+  archivo se baja desde el host y tiene que caer **adentro de `frontend/`**, que es el bind
+  mount que el contenedor ve como `/app`. El script lo deja en `frontend/.openapi.json` y lo
+  borra con un `trap`.
+
+Escribe sobre `src/api/schema.d.ts` **recién cuando la generación terminó bien**, así una
+corrida a medias no deja el schema roto, y avisa si no cambió nada. `OPENAPI_URL` permite
+apuntarlo a otro lado. Después conviene el `tsc -b`: si el backend agregó un campo requerido,
+ahí es donde se ve.
 
 `src/routeTree.gen.ts` lo genera el plugin de router y **se commitea**. No está
 gitignoreado a propósito: `pnpm build` corre `tsc -b` antes que `vite build`, así que en un
@@ -457,6 +475,32 @@ el cableado, no el render.
   búsqueda por número de ticket o remito, rango de fecha de viaje, tres switches, la columna de
   ticket, el detalle con tickets y remitos, y el cálculo del costo. Tarifarios es el CRUD
   completo, y el único con alta propia.
+- **La OS tiene su propia lista de destinos, y es el segundo formulario con listas dinámicas.**
+  `FilasDestinoOrden` copia el molde de `FilasTarifaFlete` (`insertListItem`/`removeListItem`,
+  `<Select searchable limit={50}>` para las ~1793 ubicaciones, el error de fila entera renderizado
+  aparte). Los destinos viajan en el **mismo PUT** que el resto de la OS, así que no hay estados
+  intermedios que reconciliar.
+- **Los destinos siempre se mandan, incluso vacíos, y eso es a propósito.** En la API el campo es
+  tri-estado: omitirlo es "no tocar", `[]` es "borralos". El formulario tiene la lista completa en
+  pantalla, así que siempre manda su estado real; mandar `undefined` desde acá haría que vaciar la
+  lista no se guarde nunca.
+- **El `<Alert>` de procedencia es lo que evita que el costo sea magia.** Con destinos cargados dice
+  que se factura hasta esa lista, tal cual; sin ellos, que sale de los remitos y que un destino en
+  el exterior se reemplaza por el punto de salida de la vía. Sale de `origen_destinos` del detalle.
+- **En una OS de cámara el fieldset va deshabilitado con su motivo, no gris y mudo.** El costeo
+  ignora los destinos por completo (`cantidad_destinos = 0`), así que dejar los inputs vivos
+  invitaría a cargar filas que se descartan sin explicación.
+- **El botón dice "Reemplazar por los destinos de los remitos", no "agregar".** Sumar un expreso
+  *además* de los destinos de cliente da ≥2 destinos → multiparada → resolución sólo por zona → hace
+  falta un polígono que cubra todos, y lo más probable es un 422 `sin_zona_comun`. Para un expreso la
+  semántica es reemplazo: se factura hasta ahí, un destino, directo.
+- **Una ubicación sin coordenadas se marca en la fila con un badge "sin geo".** La tarifa por zona
+  falla con `sin_coordenadas` si a *cualquier* destino le falta el punto, y eso hoy se descubre
+  recién al apretar Calcular; `tiene_coordenadas` viene en las opciones justamente para avisar antes.
+- **El aviso de costo desactualizado sale de `costo_desactualizado`, no se calcula acá.** El PUT no
+  recalcula, así que editar destinos (o vía, o tipo de camión) deja el total guardado viejo. El
+  backend compara lo congelado contra lo vivo; el modal lo muestra sobre el total, que sigue siendo
+  el que está guardado.
 - **El formulario de tarifario es el primero del repo con listas dinámicas.** Un solo
   `useForm` tiene la vigencia más `tarifas_flete[]` y `tarifas_concepto[]`, y las filas se
   agregan y sacan con `form.insertListItem` / `form.removeListItem` de `@mantine/form` — no
@@ -515,7 +559,10 @@ el cableado, no el render.
   (409). Por eso van a un `<Alert>` dentro del modal y no a un toast que se va solo.
 - **Los `<Select>` de la OS salen del endpoint `/opciones`, no de constantes.** `tipo_operacion`,
   `tipo_camion` y `via` son `StrEnum` del backend, y hardcodearlos —como todavía hace
-  `UbicacionFormModal` con `TIPOS`— hace que agregar un valor al enum pase desapercibido.
+  `UbicacionFormModal` con `TIPOS`— hace que agregar un valor al enum pase desapercibido. **Ya pasó:**
+  `expreso` se agregó a `TipoUbicacion` y hubo que tocar a mano `TIPOS` y el `COLOR_POR_TIPO` de
+  `CapaUbicaciones`, porque ningún endpoint publica los tipos de ubicación. Las ubicaciones del
+  `<Select>` de destinos sí salen de `/ordenes-servicio/opciones`.
 - **La fila de una OS se expande y muestra sus tickets** con ingreso, egreso y estadía
   (`TicketsDeOrden`, reusado tal cual en el modal). La columna de tickets concatenados se
   conserva igual: es lo que permite barrer la tabla sin abrir nada. Una OS **sin** tickets no
