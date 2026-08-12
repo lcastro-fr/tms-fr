@@ -133,6 +133,49 @@ def test_filtra_por_con_coordenadas(client, lector, crear_ubicacion):
     assert nombres("?validada=true&con_coordenadas=false") == ["Sin punto"]
 
 
+# --- Detalle ------------------------------------------------------------------------------
+
+
+def test_el_detalle_trae_la_fila_entera(client, lector, crear_ubicacion, argentina):
+    ubicacion = crear_ubicacion(
+        "Planta Rosario", "PL01", Point(-60.6393, -32.9468, srid=SRID_WGS84)
+    )
+    ubicacion.pais = argentina
+    ubicacion.save(update_fields=["pais"])
+    client.force_login(lector)
+
+    resp = client.get(f"{UBICACIONES}{ubicacion.id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == ubicacion.id
+    assert body["codigo"] == "PL01"
+    assert body["calle"] == "Av. Siempre Viva 742"
+    assert body["pais_codigo"] == "AR"
+    assert body["validada"] is True
+    assert body["coordinates"]["coordinates"] == pytest.approx([-60.6393, -32.9468])
+
+
+def test_el_detalle_de_una_inexistente_da_404(client, lector):
+    client.force_login(lector)
+
+    resp = client.get(f"{UBICACIONES}9999")
+
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "not_found"
+
+
+def test_el_detalle_sin_permiso_da_403_y_no_401(client, crear_usuario, crear_rol, asignar_rol):
+    user = crear_usuario(email="pelado@tms.test")
+    asignar_rol(user, crear_rol("nada"))
+    client.force_login(user)
+
+    resp = client.get(f"{UBICACIONES}1")
+
+    assert resp.status_code == 403
+    assert resp.json()["error"]["detail"]["requiere"] == [PermisoCodigo.UBICACIONES_VER.value]
+
+
 def test_actualizar_corrige_la_coordenada_y_valida(client, editor, crear_ubicacion):
     ubicacion = crear_ubicacion("Sin geo", "CL100", validada=False)
     client.force_login(editor)

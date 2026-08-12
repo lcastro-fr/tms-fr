@@ -29,6 +29,7 @@ from catalog.use_cases import (
     ListarProvinciasUseCase,
     ListarUbicacionesUseCase,
     ListarZonasUseCase,
+    ObtenerUbicacionUseCase,
     ObtenerZonaUseCase,
     OpcionesUbicacionUseCase,
     UnirDivisionesUseCase,
@@ -119,6 +120,17 @@ def listar_ubicaciones(request: HttpRequest, filters: Query[UbicacionesFilters])
 )
 def opciones_ubicacion(request: HttpRequest):
     return 200, OpcionesUbicacionUseCase.execute()
+
+
+@ubicaciones_router.get(
+    "/{int:ubicacion_id}",
+    response={200: UbicacionOut, **ERRORS},
+    auth=SessionAuth(PermisoCodigo.UBICACIONES_VER),
+    summary="Obtiene una ubicación",
+    operation_id="obtenerUbicacion",
+)
+def obtener_ubicacion(request: HttpRequest, ubicacion_id: int):
+    return 200, ObtenerUbicacionUseCase.execute(ubicacion_id)
 
 
 @ubicaciones_router.post(

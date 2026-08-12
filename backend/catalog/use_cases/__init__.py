@@ -8,6 +8,7 @@ from .listar_departamentos import ListarDepartamentosUseCase
 from .listar_provincias import ListarProvinciasUseCase
 from .listar_ubicaciones import ListarUbicacionesUseCase
 from .listar_zonas import ListarZonasUseCase
+from .obtener_ubicacion import ObtenerUbicacionUseCase
 from .obtener_zona import ObtenerZonaUseCase
 from .opciones_ubicacion import OpcionesUbicacionUseCase
 from .unir_divisiones import UnirDivisionesUseCase
@@ -23,6 +24,7 @@ __all__ = [
     "ListarProvinciasUseCase",
     "ListarUbicacionesUseCase",
     "ListarZonasUseCase",
+    "ObtenerUbicacionUseCase",
     "ObtenerZonaUseCase",
     "OpcionesUbicacionUseCase",
     "UnirDivisionesUseCase",

@@ -22,9 +22,9 @@ El frontend va detrás del backend, no delante. **Sólo se construyen pantallas 
 endpoints que existen.** Nada de inventar rutas ni mockear respuestas para adelantar UI:
 si falta el endpoint, el trabajo es en `../backend`.
 
-Hoy la API tiene treinta operaciones: cuatro de auth, cinco del CRUD de zonas
-(`/api/v1/zonas/`), cinco de ubicaciones (`/api/v1/ubicaciones/`: lista con filtros, opciones,
-alta, geocodificar y PUT), tres de división política (`/api/v1/divisiones/`: provincias,
+Hoy la API tiene treinta y una operaciones: cuatro de auth, cinco del CRUD de zonas
+(`/api/v1/zonas/`), seis de ubicaciones (`/api/v1/ubicaciones/`: lista con filtros, opciones,
+detalle, alta, geocodificar y PUT), tres de división política (`/api/v1/divisiones/`: provincias,
 departamentos de una provincia y el POST de la unión), cinco de
 órdenes de servicio (`/api/v1/ordenes-servicio/`: opciones, lista con filtros, detalle, PUT y el
 POST del costo), siete de tarifarios (`/api/v1/tarifarios/`: opciones, lista con filtros, detalle,
@@ -672,6 +672,28 @@ el cableado, no el render.
 - **Una ubicación sin coordenadas se marca en la fila con un badge "sin geo".** La tarifa por zona
   falla con `sin_coordenadas` si a *cualquier* destino le falta el punto, y eso hoy se descubre
   recién al apretar Calcular; `tiene_coordenadas` viene en las opciones justamente para avisar antes.
+- **Y desde esa misma fila se arregla, sin cerrar la OS.** El lápiz abre `EditorUbicacionModal` de
+  `catalog`, que resuelve el id contra el `GET /ubicaciones/{id}` nuevo y monta el mismo
+  `UbicacionFormModal` de `/ubicaciones`. Antes el camino era cerrar la OS —perdiendo lo editado sin
+  guardar—, ir a la otra pantalla, buscar la fila y volver.
+  - **Es el primer par de modales apilados del repo**, y no hizo falta `Modal.Stack`: los dos
+    portalean a `body` con el z-index default, así que el que monta último queda encima, y el
+    `scopeTab` de Mantine corta solo cuando el foco no está en su nodo. Lo que **sí** hizo falta es
+    apagarle `closeOnEscape` y `closeOnClickOutside` a la OS mientras el hijo está abierto: los dos
+    escuchan el mismo `keydown` en `document`, y un Escape cerraba la OS **por debajo**, llevándose
+    el formulario. El hijo ya los tenía en `false` por Leaflet.
+  - **`EditorUbicacionModal` vive en `catalog` y no en `logistica`, y hace `lazy()` adentro.** Es lo
+    que deja el barrel liviano: exportar `UbicacionFormModal` directo desde `catalog/index.ts`
+    metería Leaflet y geoman en el chunk de cualquier pantalla que importe el feature, que es
+    exactamente lo que la regla de "los modales con mapa van `React.lazy`" evita.
+  - **Al guardar se invalidan las `opciones` de OS, no `ubicacionesKeys`.** El badge sale de
+    `tiene_coordenadas` de `/ordenes-servicio/opciones`, que va con `staleTime: Infinity`: sin esa
+    invalidación arreglar la coordenada no apaga el badge y parece que no pasó nada. Lo dispara el
+    prop `onGuardada` del formulario —distinto de `onCreada`, que es de `UbicacionesPanel` y sólo
+    limpia su filtro—, porque `catalog` no puede importar `logistica` para invalidar solo.
+  - **El lápiz pide `ubicaciones.ver` **y** `ubicaciones.editar`**, no sólo editar: el formulario
+    consume `/ubicaciones/opciones` y el detalle, que van con `ubicaciones.ver`. Y **no** se ata al
+    `disabled` de la fila, que habla de editar los destinos de la OS y es otro permiso.
 - **El aviso de costo desactualizado sale de `costo_desactualizado`, no se calcula acá.** El PUT no
   recalcula, así que editar destinos (o vía, o tipo de camión) deja el total guardado viejo. El
   backend compara lo congelado contra lo vivo; el modal lo muestra sobre el total, que sigue siendo

@@ -105,7 +105,8 @@ saberlo antes de buscarlo en `logistica/`.
 
 ## La API hoy
 
-Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **treinta operaciones**:
+Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **treinta y una
+operaciones**:
 
 | Método | Path | Auth | Entrada | Salida |
 |---|---|---|---|---|
@@ -126,6 +127,7 @@ Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **treinta op
 | DELETE | `/api/v1/zonas/{id}` | `zonas.eliminar` | — | 204 |
 | GET | `/api/v1/ubicaciones/` | `ubicaciones.ver` | `Query[UbicacionesFilters]` | 200 `list[UbicacionOut]` |
 | GET | `/api/v1/ubicaciones/opciones` | `ubicaciones.ver` | — | 200 `UbicacionOpcionesOut` |
+| GET | `/api/v1/ubicaciones/{id}` | `ubicaciones.ver` | — | 200 `UbicacionOut` |
 | POST | `/api/v1/ubicaciones/` | `ubicaciones.crear` | `UbicacionCrearIn` | 201 `UbicacionOut` |
 | POST | `/api/v1/ubicaciones/geocodificar` | `ubicaciones.crear` **o** `.editar` | `GeocodificarUbicacionIn` | 200 `UbicacionGeocodificadaOut` |
 | PUT | `/api/v1/ubicaciones/{id}` | `ubicaciones.editar` | `UbicacionIn` | 200 `UbicacionOut` |
@@ -279,6 +281,12 @@ propia la única forma de cargarlas era el admin. El PUT sigue siendo sólo corr
 `nombre`, `tipo` y `coordinates`, y **marca `validada=True`** — editar es revisar. `codigo` no es
 editable porque es la clave con la que `upsert_by_codigo` las reconoce, y la dirección tampoco: es
 la entrada de la geolocalización y el upsert la vuelve a traer de SAP.
+
+**El `GET /ubicaciones/{id}` existe para poder abrir el formulario desde otra pantalla.** La
+lista no sirve: son ~1785 filas y ~350 KB, y las ubicaciones que viajan embebidas en
+`/ordenes-servicio/opciones` y `/tarifarios/opciones` son `UbicacionOpcionOut`, que va fina a
+propósito y **no trae `coordinates`** — sin el punto no se puede dibujar el mapa del formulario.
+Es un adaptador de tres líneas sobre `get_ubicacion_or_raise`, calcado de `obtenerZona`.
 
 **El alta usa `UbicacionCrearIn` y no `UbicacionIn`, a propósito.** Compartir el DTO obligaba a
 elegir entre romper esa regla o **declarar en el OpenAPI campos que el PUT acepta y descarta en

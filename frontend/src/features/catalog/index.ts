@@ -20,5 +20,6 @@ export type {
     ZonaIn,
     ZonaOut,
 } from "./api";
+export { EditorUbicacionModal } from "./components/EditorUbicacionModal";
 export { UbicacionesPanel } from "./components/UbicacionesPanel";
 export { ZonasPanel } from "./components/ZonasPanel";

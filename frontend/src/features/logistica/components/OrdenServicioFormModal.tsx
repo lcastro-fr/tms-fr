@@ -26,6 +26,7 @@ import { ApiError, fieldErrors } from "../../../api/errors";
 import { formatearFecha } from "../../../lib/date";
 import { formatearPesos } from "../../../lib/money";
 import { Can, usePermisos } from "../../auth";
+import { EditorUbicacionModal } from "../../catalog";
 import {
     actualizarOrdenServicio,
     calcularCostoOrdenServicio,
@@ -56,15 +57,19 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
     const queryClient = useQueryClient();
     const { can } = usePermisos();
     const puedeEditar = can("ordenes_servicio.editar");
+    const puedeEditarUbicaciones =
+        can("ubicaciones.ver") && can("ubicaciones.editar");
     const { data: opciones } = useSuspenseQuery(
         opcionesOrdenServicioQueryOptions(),
     );
-    // El detalle es lo que trae tickets y remitos; la fila de la lista no los tiene todos.
     const { data: detalle } = useSuspenseQuery(
         ordenServicioQueryOptions(orden.id),
     );
     const [costo, setCosto] = useState<CostoOrdenServicioOut | null>(
         detalle.costo ?? null,
+    );
+    const [editandoUbicacion, setEditandoUbicacion] = useState<number | null>(
+        null,
     );
 
     const form = useForm<Valores>({
@@ -147,6 +152,8 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
             onClose={onClose}
             size="55rem"
             title={`OS ${orden.id} — ${orden.transportista_razon_social}`}
+            closeOnEscape={editandoUbicacion === null}
+            closeOnClickOutside={editandoUbicacion === null}
         >
             <form
                 onSubmit={form.onSubmit((valores) => guardar.mutate(valores))}
@@ -241,6 +248,11 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
                                 form={form}
                                 ubicaciones={opciones.ubicaciones}
                                 disabled={!puedeEditar || esCamara}
+                                onEditarUbicacion={
+                                    puedeEditarUbicaciones
+                                        ? setEditandoUbicacion
+                                        : undefined
+                                }
                             />
 
                             {puedeEditar &&
@@ -379,6 +391,18 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
                     </Group>
                 </Stack>
             </form>
+
+            {editandoUbicacion !== null && (
+                <EditorUbicacionModal
+                    ubicacionId={editandoUbicacion}
+                    onClose={() => setEditandoUbicacion(null)}
+                    onGuardada={() => {
+                        void queryClient.invalidateQueries({
+                            queryKey: ordenesServicioKeys.opciones(),
+                        });
+                    }}
+                />
+            )}
         </Modal>
     );
 }

@@ -54,6 +54,7 @@ type Props = {
     ubicacion: UbicacionOut | null;
     onClose: () => void;
     onCreada?: () => void;
+    onGuardada?: (guardada: UbicacionOut) => void;
 };
 
 type Valores = {
@@ -86,7 +87,12 @@ const validarCoordenada = (
     return null;
 };
 
-export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
+export function UbicacionFormModal({
+    ubicacion,
+    onClose,
+    onCreada,
+    onGuardada,
+}: Props) {
     const queryClient = useQueryClient();
     const { canAlguno } = usePermisos();
     const { data: opciones } = useSuspenseQuery(
@@ -223,6 +229,7 @@ export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
             if (esNuevo) {
                 onCreada?.();
             }
+            onGuardada?.(guardada);
             onClose();
         },
         onError: (error: ApiError) => {

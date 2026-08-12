@@ -239,6 +239,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ubicaciones/{ubicacion_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obtiene una ubicación */
+        get: operations["obtenerUbicacion"];
+        /** Corrige una ubicación y la marca como validada */
+        put: operations["actualizarUbicacion"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ubicaciones/geocodificar": {
         parameters: {
             query?: never;
@@ -253,23 +271,6 @@ export interface paths {
          * @description Es un preview: no crea ni modifica nada. Sólo geolocaliza direcciones de los países que soporta el proveedor; para el resto hay que marcar el punto a mano.
          */
         post: operations["geocodificarUbicacion"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ubicaciones/{ubicacion_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Corrige una ubicación y la marca como validada */
-        put: operations["actualizarUbicacion"];
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -962,6 +963,19 @@ export interface components {
             /** Paises */
             paises: components["schemas"]["PaisOpcionOut"][];
         };
+        /** UbicacionIn */
+        UbicacionIn: {
+            /** Nombre */
+            nombre: string;
+            tipo: components["schemas"]["TipoUbicacion"];
+            /** Calle */
+            calle?: string | null;
+            /** Localidad */
+            localidad?: string | null;
+            /** Provincia */
+            provincia?: string | null;
+            coordinates: components["schemas"]["GeoJSONPoint"];
+        };
         /** UbicacionGeocodificadaOut */
         UbicacionGeocodificadaOut: {
             coordinates: components["schemas"]["GeoJSONPoint"];
@@ -978,19 +992,6 @@ export interface components {
             provincia?: string | null;
             /** Pais Codigo */
             pais_codigo: string;
-        };
-        /** UbicacionIn */
-        UbicacionIn: {
-            /** Nombre */
-            nombre: string;
-            tipo: components["schemas"]["TipoUbicacion"];
-            /** Calle */
-            calle?: string | null;
-            /** Localidad */
-            localidad?: string | null;
-            /** Provincia */
-            provincia?: string | null;
-            coordinates: components["schemas"]["GeoJSONPoint"];
         };
         /** ProvinciaOut */
         ProvinciaOut: {
@@ -2785,18 +2786,16 @@ export interface operations {
             };
         };
     };
-    geocodificarUbicacion: {
+    obtenerUbicacion: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                ubicacion_id: number;
+            };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GeocodificarUbicacionIn"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -2804,7 +2803,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UbicacionGeocodificadaOut"];
+                    "application/json": components["schemas"]["UbicacionOut"];
                 };
             };
             /** @description Bad Request */
@@ -2894,6 +2893,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UbicacionOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    geocodificarUbicacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeocodificarUbicacionIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UbicacionGeocodificadaOut"];
                 };
             };
             /** @description Bad Request */

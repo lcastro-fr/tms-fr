@@ -8,6 +8,7 @@ import {
     Text,
 } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
+import { Pencil } from "@phosphor-icons/react/Pencil";
 import { Fragment, useMemo } from "react";
 
 import type { UbicacionOpcionOut } from "../api";
@@ -18,9 +19,15 @@ type Props = {
     form: UseFormReturnType<Valores>;
     ubicaciones: UbicacionOpcionOut[];
     disabled: boolean;
+    onEditarUbicacion?: (id: number) => void;
 };
 
-export function FilasDestinoOrden({ form, ubicaciones, disabled }: Props) {
+export function FilasDestinoOrden({
+    form,
+    ubicaciones,
+    disabled,
+    onEditarUbicacion,
+}: Props) {
     const opciones = useMemo(
         () =>
             ubicaciones.map((u) => ({
@@ -43,7 +50,7 @@ export function FilasDestinoOrden({ form, ubicaciones, disabled }: Props) {
                     <Table.Tr>
                         <Table.Th>Ubicación</Table.Th>
                         <Table.Th w={200}>Tipo</Table.Th>
-                        <Table.Th w={40} />
+                        <Table.Th w={76} />
                     </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -92,21 +99,42 @@ export function FilasDestinoOrden({ form, ubicaciones, disabled }: Props) {
                                         )}
                                     </Table.Td>
                                     <Table.Td>
-                                        {!disabled && (
-                                            <ActionIcon
-                                                aria-label="Quitar destino"
-                                                variant="subtle"
-                                                color="red"
-                                                onClick={() =>
-                                                    form.removeListItem(
-                                                        "destinos",
-                                                        indice,
-                                                    )
-                                                }
-                                            >
-                                                ✕
-                                            </ActionIcon>
-                                        )}
+                                        <Group gap={4} wrap="nowrap">
+                                            {onEditarUbicacion && elegida && (
+                                                <ActionIcon
+                                                    aria-label="Editar ubicación"
+                                                    title="Editar la ubicación sin cerrar la orden"
+                                                    variant="subtle"
+                                                    color={
+                                                        elegida.tiene_coordenadas
+                                                            ? undefined
+                                                            : "orange"
+                                                    }
+                                                    onClick={() =>
+                                                        onEditarUbicacion(
+                                                            elegida.id,
+                                                        )
+                                                    }
+                                                >
+                                                    <Pencil size={16} />
+                                                </ActionIcon>
+                                            )}
+                                            {!disabled && (
+                                                <ActionIcon
+                                                    aria-label="Quitar destino"
+                                                    variant="subtle"
+                                                    color="red"
+                                                    onClick={() =>
+                                                        form.removeListItem(
+                                                            "destinos",
+                                                            indice,
+                                                        )
+                                                    }
+                                                >
+                                                    ✕
+                                                </ActionIcon>
+                                            )}
+                                        </Group>
                                     </Table.Td>
                                 </Table.Tr>
                                 {/* El backend puede rechazar la fila entera: ese loc no cae en

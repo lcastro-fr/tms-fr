@@ -35,6 +35,7 @@ export const zonasKeys = {
 export const ubicacionesKeys = {
     all: ["ubicaciones"] as const,
     lista: (filters: UbicacionesFilters) => ["ubicaciones", "lista", filters] as const,
+    detail: (id: number) => ["ubicaciones", "detail", id] as const,
     opciones: () => ["ubicaciones", "opciones"] as const,
 };
 
@@ -62,6 +63,12 @@ export const ubicacionesQueryOptions = (filters: UbicacionesFilters = {}) =>
         queryFn: () =>
             http.get<UbicacionOut[]>("/ubicaciones/", { params: filters }).then((r) => r.data),
         staleTime: 5 * 60_000,
+    });
+
+export const ubicacionQueryOptions = (id: number) =>
+    queryOptions({
+        queryKey: ubicacionesKeys.detail(id),
+        queryFn: () => http.get<UbicacionOut>(`/ubicaciones/${id}`).then((r) => r.data),
     });
 
 export async function crearZona(payload: ZonaIn): Promise<ZonaOut> {
