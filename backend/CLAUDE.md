@@ -763,6 +763,47 @@ Sin esa línea el `<Select>` lista las 24 provincias en orden arbitrario. Un có
 **422 `business_rule` con `detail.codigos`, no 404**, por el mismo criterio que `replace_destinos`
 con un `ubicacion_id` inventado: un 404 en esta operación se leería como "no existe la zona".
 
+### Entre dos zonas que cubren los destinos gana la más chica
+
+`ZonaService.get_zones_covering_all` puede devolver N zonas y eso **no es un error**: las zonas se
+solapan de verdad. Con los datos reales, un destino en Bariloche cae en `Bariloche` (5.438 km²) y en
+`Neuquen / Bariloche` (99.708 km²) a la vez. Antes, si el tarifario tenía tarifa en las dos,
+`_resolve_por_zona` respondía 409 y la OS no se podía costear; ahora ordena las tarifas por
+`zona__superficie_km2` y **gana la zona más específica**. `TarifaAmbiguaError` quedó sólo para el
+**empate exacto de superficie**, que es ambigüedad real: elegir a dedo entre dos zonas
+indistinguibles sería la falla silenciosa. El `[:2]` sigue siendo la sonda de "¿hay más de una?", y
+el desempate final por `zona_id` hace determinista cuál de dos empatadas se nombra en el mensaje.
+
+**`Zona.superficie_km2` es una columna generada de Postgres, no un cache que escriba el service.**
+Es un `GeneratedField` con `db_persist=True` sobre `SuperficieKm2("geom")`
+(`catalog/db_functions.py`), o sea `ST_Area(geom::geography) / 1000000`. Tres razones para que la
+calcule la base y no `ZonaService`:
+
+- **El admin edita `geom` sin pasar por el service** (`ZonaAdmin` es un `GISModelAdmin`), así que un
+  cache escrito en `create_zona`/`update_zona` quedaría viejo y el costeo elegiría mal en silencio.
+- No hace falta data migration: `ADD COLUMN ... GENERATED ALWAYS AS (...) STORED` computa las filas
+  existentes en el mismo DDL. Postgres lo acepta porque `ST_Area(geography)` y el cast
+  `geometry → geography` son los dos `IMMUTABLE`.
+- Es un número, no una decisión: no hay caso en que se quiera guardar otro.
+
+**No sirve `Area("geom")` de Django.** En 4326 emite `ST_Area(geometry)`, que devuelve **grados
+cuadrados**, y `PostGISOperations.get_area_att_for_field` los etiqueta `sq_m` igual: `.sq_km` daría
+un número inventado sin un solo error. El cast a `geography` es lo que da metros geodésicos. Y
+`SuperficieKm2` hereda de `GeoFunc` porque un `Func` pelado envuelve el string `"geom"` en un
+`Value` y emite `ST_Area('geom'::geography)`. Vive en `catalog/db_functions.py` y no en
+`models/zonas_models.py` porque **la migración lo importa por path**: moverlo rompe una migración
+histórica.
+
+La única cosa que el `GeneratedField` obliga a recordar: **el `INSERT` lo trae de vuelta y el
+`UPDATE` no.** `db_returning = True` deja el valor en la instancia recién creada, pero un `UPDATE`
+no tiene `RETURNING`, así que `update_zona` hace `refresh_from_db(fields=["superficie_km2"])` o el
+PUT responde con la superficie de la geometría anterior.
+
+Esta superficie **no es la misma** que `superficie_km2` de `Provincia`/`Departamento`: aquélla es la
+declarada por el INDEC y viaja en el preview de `/divisiones/union`; ésta se calcula sobre la
+geometría **ya simplificada** que se guardó. Neuquén: el INDEC declara 94.269,67 km² y la zona
+guardada mide 94.270,62.
+
 ## Convenciones de código
 
 Las que cruzan las dos capas (comentarios, vocabulario, sufijos de DTO) están en
@@ -864,8 +905,9 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
   API de división política y `DivisionService`: la unión de dos vecinos da un polígono, la de dos
   disjuntos da dos, la superficie no cuenta dos veces un departamento de una provincia ya marcada,
   y el orden de las provincias, que sin `order_by` explícito es arbitrario—, los de
-  `logistica/tests/` (resolución de destinos por vía, destinos explícitos de la OS, costeo y la
-  API de órdenes de servicio),
+  `logistica/tests/` (resolución de destinos por vía, destinos explícitos de la OS, costeo
+  —incluida la resolución **por zona**: que entre dos que cubren los destinos gane la más chica y
+  que el empate exacto de superficie siga siendo 409— y la API de órdenes de servicio),
   los de `transportista/tests/` (la API de tarifarios: alta con hijos, XOR, duplicados,
   solapamiento, el bloqueo por "en uso" y el filtro de vencidos) y los de la geolocalización de
   la ingesta** (`tracking/tests/`, con un `Geocoder` falso inyectado

@@ -46,7 +46,7 @@ src/
     tracking/        tickets, remitos
   routes/      file-based. Sólo composición.
   components/  UI compartida, sin conocimiento de dominio.
-  lib/         date.ts, money.ts, geojson.ts
+  lib/         date.ts, money.ts, numero.ts, geojson.ts, texto.ts
 ```
 
 Anatomía de un feature:
@@ -552,6 +552,8 @@ Los archivos de test cubren exactamente lo que es silencioso cuando se rompe:
   tomado de la zona del browser guarda la fecha corrida sin que nadie se entere.
 - `src/lib/money.test.ts` — el formateo del `Decimal`-string, incluido el caso vacío que
   `Number("")` convierte en un `$ 0,00` que parece un precio real.
+- `src/lib/numero.test.ts` — la superficie de una zona, con la misma trampa del `Number("")` y el
+  umbral de los 100 km², abajo del cual redondear a entero mostraría `0`.
 - `src/api/errors.test.ts` — el mapeo de `loc` a campo de formulario, sobre todo el caso
   anidado: dos filas de una lista tienen que escribir en dos campos distintos, y un error de
   fila entera no puede evaporarse.
@@ -599,6 +601,13 @@ el cableado, no el render.
   búsqueda por número de ticket o remito, rango de fecha de viaje, tres switches, la columna de
   ticket, el detalle con tickets y remitos, los destinos a facturar y el cálculo del costo.
   Tarifarios es el CRUD completo.
+- **La tabla de zonas muestra la superficie en km², y no es decorativa.** Es el número con el que el
+  backend desempata: cuando dos zonas cubren los destinos de una OS, se costea contra **la más
+  chica**. Sin verlo, quien carga las zonas no puede predecir contra qué zona se tarifa cuando se
+  solapan (con los datos reales, Bariloche 5.438 km² está adentro de Neuquen / Bariloche 99.708).
+  Va con `accessorFn` numérico y no `accessorKey`: sobre el string del `Decimal` el orden sería
+  lexicográfico. Debajo de 100 km² `formatearKm2` conserva dos decimales, porque una zona chica
+  redondeada a entero se leería como `0 km²`.
 - **Una zona se puede componer marcando provincias y departamentos, y el resultado sigue siendo
   editable a mano.** El modal tiene dos pestañas —**Dibujar** y **División política**— pero **un
   solo mapa**, montado afuera de los `Tabs`: cambiar de pestaña no lo remonta ni pierde lo dibujado,

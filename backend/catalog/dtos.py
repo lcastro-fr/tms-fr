@@ -65,6 +65,7 @@ class ZonaOut(BaseModel):
     id: int
     nombre: str
     active: bool
+    superficie_km2: Decimal
     geom: GeoJSONMultiPolygon
 
     @classmethod
@@ -73,6 +74,7 @@ class ZonaOut(BaseModel):
             id=zona.id,
             nombre=zona.nombre,
             active=zona.active,
+            superficie_km2=zona.superficie_km2,
             geom=multipolygon_out(zona.geom),
         )
 

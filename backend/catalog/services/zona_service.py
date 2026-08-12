@@ -72,12 +72,12 @@ class ZonaService:
     @staticmethod
     def get_zones_covering_all(puntos: list[Point]) -> list[Zona]:
         """
-        Zonas que cubren TODOS los puntos.
+        Zonas que cubren TODOS los puntos, de la más chica a la más grande.
         """
         if not puntos:
             return []
         objetivo = MultiPoint(*puntos, srid=SRID_WGS84)
-        return list(Zona.objects.filter(geom__covers=objetivo))
+        return list(Zona.objects.filter(geom__covers=objetivo).order_by("superficie_km2"))
 
     @staticmethod
     def list_zonas() -> list[Zona]:
@@ -127,6 +127,7 @@ class ZonaService:
                 f"Ya existe otra zona con nombre {nombre}",
                 detail={"nombre": nombre},
             ) from exc
+        zona.refresh_from_db(fields=["superficie_km2"])
         return zona
 
     @staticmethod

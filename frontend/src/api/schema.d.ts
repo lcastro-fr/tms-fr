@@ -872,6 +872,8 @@ export interface components {
             nombre: string;
             /** Active */
             active: boolean;
+            /** Superficie Km2 */
+            superficie_km2: string;
             geom: components["schemas"]["GeoJSONMultiPolygon"];
         };
         /** ZonaIn */

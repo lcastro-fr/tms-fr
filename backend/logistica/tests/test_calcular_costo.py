@@ -4,8 +4,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
+from django.contrib.gis.geos import MultiPolygon, Polygon
 
-from catalog.enums import TipoCamion, TipoUbicacion
+from catalog.enums import SRID_WGS84, TipoCamion, TipoUbicacion
+from catalog.models import Zona
 from logistica.services import OrdenServicioService
 from tracking.services import RemitoService
 from tracking.use_cases import CalcularCostoOrdenServicioUseCase
@@ -33,6 +35,33 @@ def tarifa_por_ubicacion(tarifario, ubicacion, precio: str, modalidad: Modalidad
         tipo_camion=TipoCamion.SEMI.value,
         hombreador=False,
         precio=Decimal(precio),
+    )
+
+
+def tarifa_por_zona(tarifario, zona, precio: str, modalidad: ModalidadFlete):
+    return TarifaFlete.objects.create(
+        tarifario=tarifario,
+        zona=zona,
+        modalidad=modalidad.value,
+        tipo_camion=TipoCamion.SEMI.value,
+        hombreador=False,
+        precio=Decimal(precio),
+    )
+
+
+def zona_cuadrada(nombre: str, lado: float) -> Zona:
+    """Un cuadrado centrado en el destino que crea `crear_ubicacion`."""
+    x, y = -58.3816, -34.6037
+    mitad = lado / 2
+    anillo = (
+        (x - mitad, y - mitad),
+        (x + mitad, y - mitad),
+        (x + mitad, y + mitad),
+        (x - mitad, y + mitad),
+        (x - mitad, y - mitad),
+    )
+    return Zona.objects.create(
+        nombre=nombre, geom=MultiPolygon(Polygon(anillo), srid=SRID_WGS84)
     )
 
 
@@ -170,6 +199,37 @@ def test_dos_destinos_explicitos_pasan_a_multiparada(crear_orden, crear_ubicacio
 
     # Multiparada se resuelve sólo por zona: la tarifa por ubicación no aplica.
     assert exc.value.detail["motivo"] == "sin_zona_comun"
+
+
+def test_entre_dos_zonas_que_cubren_los_destinos_gana_la_mas_chica(
+    crear_orden, crear_ubicacion, tarifario
+):
+    orden = crear_orden(tipo_camion=TipoCamion.SEMI.value)
+    uno = crear_ubicacion("CL520")
+    dos = crear_ubicacion("CL521")
+    OrdenServicioService.replace_destinos(orden, [uno.id, dos.id])
+    multiparada = ModalidadFlete.MULTIPARADA
+    tarifa_por_zona(tarifario, zona_cuadrada("Grande", 1.0), "200000.00", multiparada)
+    tarifa_por_zona(tarifario, zona_cuadrada("Chica", 0.2), "80000.00", multiparada)
+
+    costo = CalcularCostoOrdenServicioUseCase.execute(orden.id)
+
+    assert costo.precio_flete == Decimal("80000.00")
+    assert costo.modalidad == ModalidadFlete.MULTIPARADA.value
+
+
+def test_dos_zonas_de_la_misma_superficie_siguen_siendo_ambiguas(
+    crear_orden, crear_ubicacion, tarifario
+):
+    orden = crear_orden(tipo_camion=TipoCamion.SEMI.value)
+    OrdenServicioService.replace_destinos(orden, [crear_ubicacion("CL522").id])
+    tarifa_por_zona(tarifario, zona_cuadrada("Una", 0.4), "80000.00", ModalidadFlete.DIRECTO)
+    tarifa_por_zona(tarifario, zona_cuadrada("Otra", 0.4), "90000.00", ModalidadFlete.DIRECTO)
+
+    with pytest.raises(TarifarioService.TarifaAmbiguaError) as exc:
+        CalcularCostoOrdenServicioUseCase.execute(orden.id)
+
+    assert exc.value.detail["zonas"] == ["Una", "Otra"]
 
 
 def test_override_multiparada_fuerza_la_zona_con_un_solo_destino(

@@ -17,6 +17,7 @@ import { useState } from "react";
 import { ApiError, fieldErrors } from "../../../api/errors";
 import { MapaBase } from "../../../components/MapaBase";
 import { verticesDistintos } from "../../../lib/geojson";
+import { formatearKm2 } from "../../../lib/numero";
 import { actualizarZona, crearZona, zonasKeys } from "../api";
 import type {
     GeoJSONMultiPolygon,
@@ -187,7 +188,7 @@ export function ZonaFormModal({ zona, onClose }: Props) {
                                             ? "Un polígono"
                                             : `${compuesta.poligonos} polígonos separados`}{" "}
                                         de {compuesta.vertices} vértices,{" "}
-                                        {compuesta.superficie_km2} km².
+                                        {formatearKm2(compuesta.superficie_km2)} km².
                                     </Text>
                                 </Alert>
                             )}

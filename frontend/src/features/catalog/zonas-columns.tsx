@@ -2,6 +2,7 @@ import { Button, Checkbox, Group } from "@mantine/core";
 
 import type { ColumnDefs } from "../../components/DataTable";
 import { verticesDistintos } from "../../lib/geojson";
+import { formatearKm2 } from "../../lib/numero";
 import type { ZonaOut } from "./api";
 
 type Acciones = {
@@ -43,6 +44,14 @@ export function zonasColumns({
             ),
         },
         { accessorKey: "nombre", header: "Nombre" },
+        {
+            id: "superficie",
+            header: "Superficie (km²)",
+            // Numérico y no accessorKey: sobre el string del Decimal el orden sería lexicográfico.
+            accessorFn: (zona) => Number(zona.superficie_km2),
+            enableGlobalFilter: false,
+            cell: ({ row }) => formatearKm2(row.original.superficie_km2),
+        },
         {
             id: "vertices",
             header: "Vértices",

@@ -96,6 +96,30 @@ def test_una_zona_puede_ser_dos_poligonos_disjuntos(client, usuario_con):
     assert len(resp.json()["geom"]["coordinates"]) == 2
 
 
+def test_la_superficie_sale_calculada_sobre_la_geometria(client, usuario_con):
+    client.force_login(usuario_con(PermisoCodigo.ZONAS_CREAR))
+
+    resp = client.post(ZONAS, zona_in("Norte", CUADRADO), content_type="application/json")
+
+    assert resp.status_code == 201
+    # 0,1° × 0,1° a la altura de CABA. En grados cuadrados serían 0,01.
+    assert float(resp.json()["superficie_km2"]) == pytest.approx(101.82, abs=0.01)
+
+
+def test_el_put_devuelve_la_superficie_de_la_geometria_nueva(client, usuario_con):
+    client.force_login(usuario_con(PermisoCodigo.ZONAS_CREAR, PermisoCodigo.ZONAS_EDITAR))
+    creada = client.post(ZONAS, zona_in("Norte", CUADRADO), content_type="application/json")
+
+    resp = client.put(
+        f"{ZONAS}{creada.json()['id']}",
+        zona_in("Norte", DISJUNTOS),
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 200
+    assert float(resp.json()["superficie_km2"]) == pytest.approx(205.98, abs=0.01)
+
+
 def test_un_polygon_pelado_se_rechaza_con_payload_invalid(client, usuario_con):
     client.force_login(usuario_con(PermisoCodigo.ZONAS_CREAR))
     payload = {"nombre": "Norte", "geom": {"type": "Polygon", "coordinates": CUADRADO[0]}}

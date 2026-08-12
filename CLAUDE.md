@@ -22,6 +22,9 @@ Cuatro pasos, en orden. No adelantarse a los siguientes.
    **componer marcando provincias y departamentos** del INDEC, y el resultado queda editable en el
    mapa. Es lo que hace practicable una zona como "toda la provincia de Buenos Aires", que son
    22.658 vértices y 81 polígonos por las islas del Delta.
+   **Las zonas se solapan, y eso ya no traba el costeo:** cada una guarda su superficie y cuando
+   dos cubren los destinos se tarifa contra la más chica, o sea la más específica. `/zonas` muestra
+   esa superficie porque es lo que hace predecible el resultado.
    **Hasta dónde se factura el viaje ya no se deduce de los remitos:** la OS tiene sus propios
    destinos, que el usuario carga en `/ordenes-servicio` y el costeo usa tal cual. Es lo que
    permite facturar hasta un puerto, un aeropuerto o un **expreso** cuando el remito dice otra
@@ -199,11 +202,11 @@ Los de cada capa están en su documento. Estos cruzan las dos:
 - **No hay `.env.example`**, aunque el arranque lo asumía (`cp .env.example .env`).
 - **La cobertura es parcial y desigual.** El backend tiene auth/RBAC (`users/tests/`), los
   contratos de catalog, incluida la división política (`catalog/tests/`), la resolución de
-  destinos, el costeo y la API de OS
+  destinos, el costeo —incluido el desempate entre zonas solapadas— y la API de OS
   (`logistica/tests/`), la API de tarifarios (`transportista/tests/`) y la geolocalización de la
   ingesta (`tracking/tests/`); el frontend tiene las conversiones geo, el cableado de los dos
-  mapas, los helpers de fecha y dinero (`lib/`), el mapeo de errores de campo (`api/`) y la
-  búsqueda global de las tablas (`components/`).
+  mapas, los helpers de fecha, dinero y superficie (`lib/`), el mapeo de errores de campo (`api/`)
+  y la búsqueda global de las tablas (`components/`).
   Sin cobertura: `shared/models.py` —el borrado lógico, el código más delicado del repo—, y
   **no hay MSW**, así que en el frontend no se
   pueden testear estados de carga ni error del camino real de datos.

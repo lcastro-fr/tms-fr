@@ -570,8 +570,11 @@ class TarifarioService:
                 detail={"motivo": "sin_zona_comun", "codigos": codigos},
             )
 
+        # Gana la zona más específica, o sea la de menor superficie.
         tarifas = list(
-            TarifaFlete.objects.filter(**clave, zona__in=zonas).select_related("zona")[:2]
+            TarifaFlete.objects.filter(**clave, zona__in=zonas)
+            .select_related("zona")
+            .order_by("zona__superficie_km2", "zona_id")[:2]
         )
         if not tarifas:
             raise TarifarioService.TarifaNoResueltaError(
@@ -587,12 +590,18 @@ class TarifarioService:
                 },
             )
         if len(tarifas) > 1:
-            nombres = [t.zona.nombre for t in tarifas]
-            raise TarifarioService.TarifaAmbiguaError(
-                f"El tarifario {clave['tarifario'].id} tiene tarifas en más de una zona que "
-                f"cubre los destinos: {', '.join(nombres)}",
-                detail={"tarifario_id": clave["tarifario"].id, "zonas": nombres},
-            )
+            primera, segunda = (t.zona for t in tarifas if t.zona is not None)
+            if primera.superficie_km2 == segunda.superficie_km2:
+                nombres = [primera.nombre, segunda.nombre]
+                raise TarifarioService.TarifaAmbiguaError(
+                    f"El tarifario {clave['tarifario'].id} tiene tarifas en dos zonas de la "
+                    f"misma superficie que cubren los destinos: {', '.join(nombres)}",
+                    detail={
+                        "tarifario_id": clave["tarifario"].id,
+                        "zonas": nombres,
+                        "superficie_km2": str(primera.superficie_km2),
+                    },
+                )
         return tarifas[0]
 
     @staticmethod

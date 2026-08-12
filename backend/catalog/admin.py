@@ -33,7 +33,7 @@ class UbicacionAdmin(admin.ModelAdmin):
 
 @admin.register(Zona)
 class ZonaAdmin(gis_admin.GISModelAdmin):
-    list_display = ("nombre", "active")
+    list_display = ("nombre", "superficie_km2", "active")
     list_filter = ("active",)
     search_fields = ("nombre",)
     ordering = ("nombre",)
