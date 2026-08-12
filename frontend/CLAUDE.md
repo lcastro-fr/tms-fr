@@ -564,6 +564,10 @@ Los archivos de test cubren exactamente lo que es silencioso cuando se rompe:
   en otro continente sin tirar un error. Desde MultiPolygon cubre además el nivel de anidamiento
   extra: que los polígonos queden **separados** (unirlos dibujaría una zona que no existe), que se
   cierren todos los anillos y no sólo el primero, y que el bounding box los abarque todos.
+  Cubre también `parsearParLatLng`, el parser del paste de coordenadas: los tres separadores que
+  acepta, el redondeo a 6 decimales, y sobre todo lo que **rechaza** —un número solo, una
+  dirección, un par fuera de rango—, porque devolver un par a medias ahí escribiría una coordenada
+  que el usuario nunca tipeó.
 - `src/features/catalog/components/EditorPolygono.test.tsx` — el cableado de geoman: montar y
   desmontar con los modos activos, y que los eventos de edición lleguen al `onChange`. Monta
   Leaflet de verdad con un `getBoundingClientRect` falso. Suma lo de MultiPolygon: que emita
@@ -785,6 +789,27 @@ el cableado, no el render.
   geolocalizar el mapa se queda donde estaba y el marcador aparece fuera de pantalla: la feature
   *parece* rota. `EncuadrarEn` no sirve para un punto, `fitBounds` de un bounds degenerado zoomea
   al máximo. Tiene test porque cuando se rompe se rompe en silencio.
+- **La coordenada se tipea, se pega o se marca, y los tres caminos escriben lo mismo.** Los campos
+  del form son `lat` y `lng` (`number | string`, `""` vacío) y el `GeoJSONPoint` se **deriva** con
+  `aPunto()`; modelarlo al revés —`coordinates` como estado— obligaría a cada input a mantener su
+  propio string en paralelo, porque un `-34.` a medio tipear no es un punto. Con lat/lng como
+  fuente única, click y drag del mapa actualizan los inputs sin un solo `useEffect` de
+  sincronización. Ojo con el derivado: `NumberInput` entrega `"-"` mientras se escribe el signo, y
+  un `NaN` ahí llega a Leaflet como posición del marcador.
+- **El separador decimal de esos dos campos es punto, no coma como en los precios.** Los
+  `NumberInput` de `FilasTarifaFlete` van `decimalSeparator=","` porque es plata en es-AR; una
+  coordenada se copia de Google Maps o de un GPS, que emiten `-34.603722`. Con coma, el caso de uso
+  principal se rechaza. Por lo mismo hay un `onPaste` que parte `-34.603722, -58.381592` en los dos
+  campos: pegar el par en un `NumberInput` lo corta en la coma y no deja nada usable.
+- **Van sin `min`/`max`, y el rango se valida en el form.** El `clampBehavior` por default de
+  Mantine es `"blur"`: un `95` tipeado en latitud se convertiría solo en `90` sin decir nada, que
+  es exactamente la falla silenciosa. El validador espeja a `_build_coordinates` del backend, que
+  tira `CoordenadasInvalidasError` — un `business_rule`, o sea el `<Alert>` y no el campo.
+- **El mapa se centra al salir del campo, no mientras se escribe.** `-3` → `-34` → `-34.6` son
+  tres lugares distintos del planeta, así que un debounce haría saltar el mapa tres veces por
+  coordenada. El `onBlur` alimenta el mismo `CentrarEn` que usa el geocoder, y **compone** con el
+  `onBlur` que ya trae `getInputProps` en vez de pisarlo. El click del mapa no lo toca: ya estás
+  mirando ahí.
 - **Al crear con "Sólo pendientes de validar" prendido, el filtro se limpia solo.** La ubicación
   nueva nace validada, así que no entraría en ese filtro y el usuario vería que "no pasó nada". El
   modal avisa con `onCreada` y el panel saca el filtro.

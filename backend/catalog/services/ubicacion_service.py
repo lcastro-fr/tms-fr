@@ -103,7 +103,7 @@ class UbicacionService:
 
     @staticmethod
     def update_ubicacion(
-        ubicacion: Ubicacion, nombre: str, tipo: str, lat: float, lng: float
+        ubicacion: Ubicacion, nombre: str, tipo: str, localidad: str | None , provincia: str | None, calle: str | None, lat: float, lng: float
     ) -> Ubicacion:
         UbicacionService._check_tipo(tipo)
         coordinates = UbicacionService._build_coordinates(lat, lng)
@@ -111,10 +111,20 @@ class UbicacionService:
         ubicacion.nombre = nombre
         ubicacion.tipo = tipo
         ubicacion.coordinates = coordinates
+
+        if provincia is not None:
+            ubicacion.provincia = provincia
+
+        if localidad is not None:
+            ubicacion.localidad = localidad
+
+        if calle is not None:
+            ubicacion.calle = calle
+
         ubicacion.validada = True
         with transaction.atomic():
             ubicacion.save(
-                update_fields=["nombre", "tipo", "coordinates", "validada", "updated_at"]
+                update_fields=["nombre", "tipo", "coordinates", "localidad", "provincia", "calle", "validada", "updated_at"]
             )
         return ubicacion
 

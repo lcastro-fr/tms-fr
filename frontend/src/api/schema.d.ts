@@ -984,6 +984,12 @@ export interface components {
             /** Nombre */
             nombre: string;
             tipo: components["schemas"]["TipoUbicacion"];
+            /** Calle */
+            calle?: string | null;
+            /** Localidad */
+            localidad?: string | null;
+            /** Provincia */
+            provincia?: string | null;
             coordinates: components["schemas"]["GeoJSONPoint"];
         };
         /** ProvinciaOut */

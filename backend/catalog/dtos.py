@@ -82,6 +82,9 @@ class ZonaOut(BaseModel):
 class UbicacionIn(BaseModel):
     nombre: str = Field(min_length=1, max_length=120)
     tipo: TipoUbicacion
+    calle: CalleUbicacion | None = None
+    localidad: LocalidadUbicacion | None = None
+    provincia: LocalidadUbicacion | None = None
     coordinates: GeoJSONPoint
 
 

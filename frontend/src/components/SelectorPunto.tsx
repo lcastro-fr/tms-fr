@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { Marker, useMapEvents } from "react-leaflet";
 
 import type { components } from "../api/schema";
-import { aLatLng } from "../lib/geojson";
+import { aLatLng, aPunto } from "../lib/geojson";
 import styles from "./SelectorPunto.module.css";
 
 type GeoJSONPoint = components["schemas"]["GeoJSONPoint"];
@@ -24,8 +24,7 @@ export function SelectorPunto({ valor, onChange }: Props) {
         [],
     );
 
-    const emitir = (latlng: L.LatLng) =>
-        onChange({ type: "Point", coordinates: [latlng.lng, latlng.lat] });
+    const emitir = (latlng: L.LatLng) => onChange(aPunto(latlng.lat, latlng.lng));
 
     useMapEvents({
         click: (evento) => emitir(evento.latlng),

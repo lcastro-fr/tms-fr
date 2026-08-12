@@ -18,6 +18,31 @@ export function aLatLng(punto: GeoJSONPoint): LatLng {
     return [lat, lng];
 }
 
+export function aPunto(lat: number, lng: number): GeoJSONPoint {
+    return { type: "Point", coordinates: [lng, lat] };
+}
+
+/** ≈0,1 m. Leaflet devuelve ~15 dígitos y llenar un input con eso es ruido. */
+export function redondearCoordenada(valor: number): number {
+    return Math.round(valor * 1e6) / 1e6;
+}
+
+const PAR_LAT_LNG = /^\s*(-?\d+(?:\.\d+)?)\s*(?:,\s*|\s+)(-?\d+(?:\.\d+)?)\s*$/;
+
+/** El formato que copia Google Maps: latitud primero, decimales con punto. */
+export function parsearParLatLng(texto: string): LatLng | null {
+    const match = PAR_LAT_LNG.exec(texto);
+    if (!match) {
+        return null;
+    }
+    const lat = Number(match[1]);
+    const lng = Number(match[2]);
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        return null;
+    }
+    return [redondearCoordenada(lat), redondearCoordenada(lng)];
+}
+
 export function cerrarAnillos(coordinates: number[][][][]): number[][][][] {
     return coordinates.map((poligono) =>
         poligono.map((anillo) => {

@@ -5,6 +5,7 @@ import {
     Group,
     Input,
     Modal,
+    NumberInput,
     Select,
     Stack,
     Text,
@@ -18,12 +19,19 @@ import {
     useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import type { ClipboardEvent } from "react";
 
 import { ApiError, fieldErrors } from "../../../api/errors";
 import { CentrarEn } from "../../../components/CentrarEn";
 import { MapaBase } from "../../../components/MapaBase";
 import { SelectorPunto } from "../../../components/SelectorPunto";
-import { aLatLng } from "../../../lib/geojson";
+import {
+    aLatLng,
+    aPunto,
+    parsearParLatLng,
+    redondearCoordenada,
+} from "../../../lib/geojson";
+import type { LatLng } from "../../../lib/geojson";
 import { usePermisos } from "../../auth";
 import {
     actualizarUbicacion,
@@ -33,7 +41,6 @@ import {
     ubicacionesOpcionesQueryOptions,
 } from "../api";
 import type {
-    GeoJSONPoint,
     TipoUbicacion,
     UbicacionCrearIn,
     UbicacionIn,
@@ -57,7 +64,26 @@ type Valores = {
     localidad: string;
     provincia: string;
     pais_codigo: string;
-    coordinates: GeoJSONPoint | null;
+    lat: number | string;
+    lng: number | string;
+};
+
+const validarCoordenada = (
+    valor: number | string,
+    maximo: number,
+    faltante: string,
+) => {
+    if (valor === "") {
+        return faltante;
+    }
+    const numero = Number(valor);
+    if (!Number.isFinite(numero)) {
+        return "No es un número";
+    }
+    if (Math.abs(numero) > maximo) {
+        return `Tiene que estar entre -${maximo} y ${maximo}`;
+    }
+    return null;
 };
 
 export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
@@ -67,6 +93,9 @@ export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
         ubicacionesOpcionesQueryOptions(),
     );
     const esNuevo = ubicacion === null;
+    const [latInicial, lngInicial] = ubicacion?.coordinates
+        ? aLatLng(ubicacion.coordinates)
+        : ["" as const, "" as const];
 
     const form = useForm<Valores>({
         initialValues: {
@@ -77,12 +106,23 @@ export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
             localidad: ubicacion?.localidad ?? "",
             provincia: ubicacion?.provincia ?? "",
             pais_codigo: ubicacion?.pais_codigo ?? "AR",
-            coordinates: ubicacion?.coordinates ?? null,
+            lat: latInicial,
+            lng: lngInicial,
         },
         validate: {
             nombre: (valor) => (valor.trim() ? null : "Ingresá un nombre"),
-            coordinates: (valor) =>
-                valor ? null : "Marcá la coordenada en el mapa",
+            lat: (valor) =>
+                validarCoordenada(
+                    valor,
+                    90,
+                    "Escribí la latitud o marcá el punto en el mapa",
+                ),
+            lng: (valor) =>
+                validarCoordenada(
+                    valor,
+                    180,
+                    "Escribí la longitud o marcá el punto en el mapa",
+                ),
             calle: (valor) =>
                 !esNuevo || valor.trim() ? null : "Ingresá la calle",
             localidad: (valor) =>
@@ -99,7 +139,23 @@ export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
     const [centro] = useState(() =>
         ubicacion?.coordinates ? aLatLng(ubicacion.coordinates) : undefined,
     );
+    const [aCentrar, setACentrar] = useState<LatLng | null>(null);
     const esPlanta = form.values.tipo === "planta";
+
+    const { lat, lng } = form.values;
+    // A medio tipear NumberInput entrega "-" o "": un NaN acá llega a Leaflet como posición.
+    const punto = useMemo(() => {
+        const numeroLat = lat === "" ? NaN : Number(lat);
+        const numeroLng = lng === "" ? NaN : Number(lng);
+        return Number.isFinite(numeroLat) && Number.isFinite(numeroLng)
+            ? aPunto(numeroLat, numeroLng)
+            : null;
+    }, [lat, lng]);
+
+    const escribirCoordenada = (punto: LatLng) => {
+        form.setFieldValue("lat", redondearCoordenada(punto[0]));
+        form.setFieldValue("lng", redondearCoordenada(punto[1]));
+    };
 
     const ubicaciones = useUbicaciones();
     const vecinas = useMemo(
@@ -118,16 +174,27 @@ export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
 
     const guardar = useMutation({
         mutationFn: (valores: Valores) => {
-            if (!valores.coordinates) {
+            const lat = Number(valores.lat);
+            const lng = Number(valores.lng);
+            if (
+                valores.lat === "" ||
+                valores.lng === "" ||
+                !Number.isFinite(lat) ||
+                !Number.isFinite(lng)
+            ) {
                 throw new Error(
                     "Sin coordenada: el validate tendría que haberlo frenado",
                 );
             }
+            const coordinates = aPunto(lat, lng);
             if (ubicacion) {
                 const payload: UbicacionIn = {
                     nombre: valores.nombre.trim(),
                     tipo: valores.tipo,
-                    coordinates: valores.coordinates,
+                    localidad: valores.localidad.trim(),
+                    provincia: valores.provincia.trim(),
+                    calle: valores.calle.trim(),
+                    coordinates,
                 };
                 return actualizarUbicacion(ubicacion.id, payload);
             }
@@ -139,7 +206,7 @@ export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
                 localidad: valores.localidad.trim(),
                 provincia: valores.provincia.trim(),
                 pais_codigo: valores.pais_codigo,
-                coordinates: valores.coordinates,
+                coordinates,
             };
             return crearUbicacion(payload);
         },
@@ -190,7 +257,9 @@ export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
                 pais_codigo: form.values.pais_codigo,
             }),
         onSuccess: (encontrada) => {
-            form.setFieldValue("coordinates", encontrada.coordinates);
+            const geocodificado = aLatLng(encontrada.coordinates);
+            escribirCoordenada(geocodificado);
+            setACentrar(geocodificado);
         },
         onError: (error: ApiError) => {
             const campos = fieldErrors(error);
@@ -211,9 +280,26 @@ export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
         form.values.localidad.trim() ||
         form.values.provincia.trim(),
     );
-    const puntoGeocodificado = geocodificar.data
-        ? aLatLng(geocodificar.data.coordinates)
-        : null;
+
+    const propsLat = form.getInputProps("lat");
+    const propsLng = form.getInputProps("lng");
+
+    // El par que copia Google Maps entra de una: sin esto la coma corta el NumberInput.
+    const pegarPar = (evento: ClipboardEvent<HTMLInputElement>) => {
+        const par = parsearParLatLng(evento.clipboardData.getData("text"));
+        if (!par) {
+            return;
+        }
+        evento.preventDefault();
+        escribirCoordenada(par);
+        setACentrar(par);
+    };
+
+    const centrarEnLoTipeado = () => {
+        if (punto) {
+            setACentrar(aLatLng(punto));
+        }
+    };
 
     return (
         <Modal
@@ -281,20 +367,20 @@ export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
                             <TextInput
                                 label="Calle"
                                 maxLength={200}
-                                readOnly={!esNuevo}
+                                //readOnly={!esNuevo}
                                 {...form.getInputProps("calle")}
                             />
                             <Group grow align="flex-start">
                                 <TextInput
                                     label="Localidad"
                                     maxLength={120}
-                                    readOnly={!esNuevo}
+                                    //readOnly={!esNuevo}
                                     {...form.getInputProps("localidad")}
                                 />
                                 <TextInput
                                     label="Provincia"
                                     maxLength={120}
-                                    readOnly={!esNuevo}
+                                    //readOnly={!esNuevo}
                                     {...form.getInputProps("provincia")}
                                 />
                                 {esNuevo ? (
@@ -348,12 +434,38 @@ export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
                     <div>
                         <Input.Label>Coordenada</Input.Label>
                         <Text size="xs" c="dimmed" mb="xs">
-                            Clickeá el mapa para ubicar el punto, o arrastrá el
+                            Escribí la coordenada, clickeá el mapa o arrastrá el
                             marcador.
                             {esNuevo
                                 ? " La ubicación se guarda validada."
                                 : " Al guardar, la ubicación queda validada."}
                         </Text>
+                        <Group grow align="flex-start" mb="xs">
+                            <NumberInput
+                                label="Latitud"
+                                placeholder="-34.603722"
+                                decimalScale={6}
+                                hideControls
+                                {...propsLat}
+                                onPaste={pegarPar}
+                                onBlur={(evento) => {
+                                    propsLat.onBlur?.(evento);
+                                    centrarEnLoTipeado();
+                                }}
+                            />
+                            <NumberInput
+                                label="Longitud"
+                                placeholder="-58.381592"
+                                decimalScale={6}
+                                hideControls
+                                {...propsLng}
+                                onPaste={pegarPar}
+                                onBlur={(evento) => {
+                                    propsLng.onBlur?.(evento);
+                                    centrarEnLoTipeado();
+                                }}
+                            />
+                        </Group>
                         <Group mb="xs">
                             <ControlUbicaciones
                                 puedeVer={ubicaciones.puedeVer}
@@ -366,13 +478,13 @@ export function UbicacionFormModal({ ubicacion, onClose, onCreada }: Props) {
                         </Group>
                         <MapaBase center={centro} zoom={centro ? 14 : 4}>
                             <SelectorPunto
-                                valor={form.values.coordinates}
-                                onChange={(punto) =>
-                                    form.setFieldValue("coordinates", punto)
+                                valor={punto}
+                                onChange={(elegido) =>
+                                    escribirCoordenada(aLatLng(elegido))
                                 }
                             />
                             {/* MapContainer sólo honra center al montar. */}
-                            <CentrarEn punto={puntoGeocodificado} />
+                            <CentrarEn punto={aCentrar} />
                             {ubicaciones.mostrar && (
                                 <CapaUbicaciones ubicaciones={vecinas} />
                             )}

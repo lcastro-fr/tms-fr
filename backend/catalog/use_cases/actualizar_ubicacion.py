@@ -10,6 +10,13 @@ class ActualizarUbicacionUseCase:
         ubicacion = UbicacionService.get_ubicacion_or_raise(ubicacion_id)
         lng, lat = data.coordinates.coordinates
         ubicacion = UbicacionService.update_ubicacion(
-            ubicacion, nombre=data.nombre, tipo=data.tipo.value, lat=lat, lng=lng
+            ubicacion,
+            nombre=data.nombre,
+            tipo=data.tipo.value,
+            localidad=data.localidad,
+            provincia=data.provincia,
+            calle=data.calle,
+            lat=lat,
+            lng=lng,
         )
         return UbicacionOut.from_model(ubicacion)

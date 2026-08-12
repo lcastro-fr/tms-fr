@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { aLatLng, aLatLngs, boundsDe, cerrarAnillos, verticesDistintos } from "./geojson";
+import {
+    aLatLng,
+    aLatLngs,
+    aPunto,
+    boundsDe,
+    cerrarAnillos,
+    parsearParLatLng,
+    redondearCoordenada,
+    verticesDistintos,
+} from "./geojson";
 
 const CUADRADO = {
     type: "MultiPolygon" as const,
@@ -50,6 +59,58 @@ describe("aLatLng", () => {
         expect(aLatLng({ type: "Point", coordinates: [-60.6393, -32.9468] })).toEqual([
             -32.9468, -60.6393,
         ]);
+    });
+});
+
+describe("aPunto", () => {
+    it("es la vuelta de aLatLng", () => {
+        expect(aPunto(-32.9468, -60.6393)).toEqual({
+            type: "Point",
+            coordinates: [-60.6393, -32.9468],
+        });
+        expect(aLatLng(aPunto(-32.9468, -60.6393))).toEqual([-32.9468, -60.6393]);
+    });
+});
+
+describe("redondearCoordenada", () => {
+    it("deja seis decimales", () => {
+        expect(redondearCoordenada(-34.60372193821004)).toBe(-34.603722);
+    });
+});
+
+describe("parsearParLatLng", () => {
+    it("acepta el par con coma y espacio que copia Google Maps", () => {
+        expect(parsearParLatLng("-34.603722, -58.381592")).toEqual([-34.603722, -58.381592]);
+    });
+
+    it("acepta coma sola, espacio solo y espacios de sobra", () => {
+        expect(parsearParLatLng("-34.603722,-58.381592")).toEqual([-34.603722, -58.381592]);
+        expect(parsearParLatLng("-34.603722 -58.381592")).toEqual([-34.603722, -58.381592]);
+        expect(parsearParLatLng("  -34.603722 ,  -58.381592  ")).toEqual([
+            -34.603722, -58.381592,
+        ]);
+    });
+
+    it("acepta enteros y coordenadas positivas", () => {
+        expect(parsearParLatLng("40, 3")).toEqual([40, 3]);
+    });
+
+    it("redondea a seis decimales", () => {
+        expect(parsearParLatLng("-34.60372193821004, -58.38159212")).toEqual([
+            -34.603722, -58.381592,
+        ]);
+    });
+
+    it("rechaza lo que no es un par de coordenadas", () => {
+        expect(parsearParLatLng("-34.603722")).toBeNull();
+        expect(parsearParLatLng("Av. Corrientes 1234")).toBeNull();
+        expect(parsearParLatLng("")).toBeNull();
+        expect(parsearParLatLng("-34.603722, -58.381592, 12")).toBeNull();
+    });
+
+    it("rechaza un par fuera de rango en vez de escribir una coordenada imposible", () => {
+        expect(parsearParLatLng("95, -58.381592")).toBeNull();
+        expect(parsearParLatLng("-34.603722, 200")).toBeNull();
     });
 });
 
