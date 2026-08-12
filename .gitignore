@@ -50,3 +50,4 @@ seed/
 # frontend
 .pnpm-store/
 .claude/
+.tanstack/
