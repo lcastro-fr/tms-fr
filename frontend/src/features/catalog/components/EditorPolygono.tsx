@@ -7,7 +7,8 @@ import { useMap } from "react-leaflet";
 
 import { EncuadrarEn } from "../../../components/EncuadrarEn";
 import { aLatLngs, boundsDe, cerrarAnillos } from "../../../lib/geojson";
-import type { GeoJSONPolygon } from "../api";
+import type { Bounds } from "../../../lib/geojson";
+import type { GeoJSONMultiPolygon } from "../api";
 
 const EVENTOS_DE_EDICION = [
     "pm:update",
@@ -19,23 +20,43 @@ const EVENTOS_DE_EDICION = [
     "pm:cut",
 ];
 
+/** La geometría compuesta por el selector de divisiones. `version` es lo que dispara el reemplazo. */
+export type Semilla = { geom: GeoJSONMultiPolygon; version: number };
+
 type Props = {
-    valor: GeoJSONPolygon | null;
-    onChange: (geom: GeoJSONPolygon | null) => void;
-    onMultiPolygon: () => void;
+    valor: GeoJSONMultiPolygon | null;
+    semilla?: Semilla | null;
+    onChange: (geom: GeoJSONMultiPolygon | null) => void;
 };
 
-export function EditorPolygono({ valor, onChange, onMultiPolygon }: Props) {
+function sinVerticeDeCierre(geom: GeoJSONMultiPolygon) {
+    return aLatLngs(geom).map((poligono) =>
+        poligono.map((anillo) => anillo.slice(0, -1)),
+    );
+}
+
+export function EditorPolygono({ valor, semilla, onChange }: Props) {
     const map = useMap();
     const capa = useRef<L.Polygon | null>(null);
     const [inicial] = useState(valor);
-    const callbacks = useRef({ onChange, onMultiPolygon });
+    const onChangeRef = useRef(onChange);
+    const reemplazar = useRef<((geom: GeoJSONMultiPolygon) => void) | null>(
+        null,
+    );
+
+    const boundsIniciales = useMemo(
+        () => (inicial ? boundsDe([inicial]) : null),
+        [inicial],
+    );
+    const bounds = useMemo<Bounds | null>(
+        () => (semilla ? boundsDe([semilla.geom]) : boundsIniciales),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [semilla?.version, boundsIniciales],
+    );
 
     useEffect(() => {
-        callbacks.current = { onChange, onMultiPolygon };
-    }, [onChange, onMultiPolygon]);
-
-    const boundsIniciales = useMemo(() => (inicial ? boundsDe([inicial]) : null), [inicial]);
+        onChangeRef.current = onChange;
+    }, [onChange]);
 
     useEffect(() => {
         let vivo = true;
@@ -51,37 +72,49 @@ export function EditorPolygono({ valor, onChange, onMultiPolygon }: Props) {
             editMode: true,
             dragMode: true,
             removalMode: true,
+            cutPolygon: true,
             rotateMode: false,
             drawMarker: false,
             drawCircle: false,
             drawCircleMarker: false,
             drawPolyline: false,
             drawText: false,
-            cutPolygon: false,
         });
-        map.pm.setGlobalOptions({ continueDrawing: false, snappable: true, snapDistance: 20 });
+        map.pm.setGlobalOptions({
+            continueDrawing: false,
+            snappable: true,
+            snapDistance: 20,
+        });
 
         const emitir = () => {
             const actual = capa.current;
             if (!actual) {
-                callbacks.current.onChange(null);
+                onChangeRef.current(null);
                 return;
             }
-            const feature = actual.toGeoJSON();
-            if (feature.geometry.type !== "Polygon") {
-                callbacks.current.onMultiPolygon();
+            const { geometry } = actual.toGeoJSON();
+            const coordinates =
+                geometry.type === "Polygon"
+                    ? [geometry.coordinates]
+                    : geometry.type === "MultiPolygon"
+                      ? geometry.coordinates
+                      : null;
+            if (!coordinates) {
+                onChangeRef.current(null);
                 return;
             }
-            callbacks.current.onChange({
-                type: "Polygon",
-                coordinates: cerrarAnillos(feature.geometry.coordinates),
+            onChangeRef.current({
+                type: "MultiPolygon",
+                coordinates: cerrarAnillos(coordinates),
             });
         };
 
         const escuchar = (poligono: L.Polygon) =>
             EVENTOS_DE_EDICION.forEach((evento) => poligono.on(evento, emitir));
         const dejarDeEscuchar = (poligono: L.Polygon) =>
-            EVENTOS_DE_EDICION.forEach((evento) => poligono.off(evento, emitir));
+            EVENTOS_DE_EDICION.forEach((evento) =>
+                poligono.off(evento, emitir),
+            );
 
         const usarCapa = (poligono: L.Polygon, emitirAhora: boolean) => {
             const anterior = capa.current;
@@ -105,18 +138,21 @@ export function EditorPolygono({ valor, onChange, onMultiPolygon }: Props) {
             }
             dejarDeEscuchar(evento.layer as L.Polygon);
             capa.current = null;
-            callbacks.current.onChange(null);
+            onChangeRef.current(null);
         };
 
         map.on("pm:create", alCrear);
         map.on("pm:remove", alBorrar);
 
+        reemplazar.current = (geom) =>
+            usarCapa(L.polygon(sinVerticeDeCierre(geom)).addTo(map), true);
+
         if (inicial) {
-            const anillos = aLatLngs(inicial).map((anillo) => anillo.slice(0, -1));
-            usarCapa(L.polygon(anillos).addTo(map), false);
+            usarCapa(L.polygon(sinVerticeDeCierre(inicial)).addTo(map), false);
         }
 
         return () => {
+            reemplazar.current = null;
             map.off("pm:create", alCrear);
             map.off("pm:remove", alBorrar);
             map.off("unload", alDescargar);
@@ -134,5 +170,12 @@ export function EditorPolygono({ valor, onChange, onMultiPolygon }: Props) {
         };
     }, [map, inicial]);
 
-    return <EncuadrarEn bounds={boundsIniciales} />;
+    useEffect(() => {
+        if (semilla) {
+            reemplazar.current?.(semilla.geom);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [semilla?.version]);
+
+    return <EncuadrarEn bounds={bounds} />;
 }

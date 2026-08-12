@@ -18,6 +18,10 @@ Cuatro pasos, en orden. No adelantarse a los siguientes.
    Un ticket se crea cuando el camión llega. Los precios contra los que se costea se cargan
    desde `/tarifarios`, la única pantalla con alta propia: un tarifario se guarda entero
    —vigencia, tarifas de flete y conceptos adicionales— en un solo formulario.
+   Las **zonas** contra las que se tarifa ya no se dibujan sólo a mano: en `/zonas` se pueden
+   **componer marcando provincias y departamentos** del INDEC, y el resultado queda editable en el
+   mapa. Es lo que hace practicable una zona como "toda la provincia de Buenos Aires", que son
+   22.658 vértices y 81 polígonos por las islas del Delta.
    **Hasta dónde se factura el viaje ya no se deduce de los remitos:** la OS tiene sus propios
    destinos, que el usuario carga en `/ordenes-servicio` y el costeo usa tal cual. Es lo que
    permite facturar hasta un puerto, un aeropuerto o un **expreso** cuando el remito dice otra
@@ -49,7 +53,8 @@ endpoints que existen; si falta el endpoint, el trabajo es en `backend/`.
 backend/          Django. Ver backend/CLAUDE.md
 frontend/         SPA React. Ver frontend/CLAUDE.md
 nginx/            nginx.conf del proxy. Es lo que hace que todo sea same-origin.
-seed/             xlsx de datos reales para los import_* commands
+seed/             datos reales para los import_* commands: xlsx de ubicaciones, y los CSV
+                  del INDEC 2022 con los polígonos de provincias, departamentos y municipios
 scripts/          utilitarios sueltos de datos
 run-dev.sh        levanta el stack exportando DOCKER_UID/GID
 generar-tipos.sh  regenera frontend/src/api/schema.d.ts desde el openapi.json
@@ -193,7 +198,8 @@ Los de cada capa están en su documento. Estos cruzan las dos:
   tiene menos que eso, `pnpm dev/build/test` sólo corren adentro del contenedor.
 - **No hay `.env.example`**, aunque el arranque lo asumía (`cp .env.example .env`).
 - **La cobertura es parcial y desigual.** El backend tiene auth/RBAC (`users/tests/`), los
-  contratos de catalog (`catalog/tests/`), la resolución de destinos, el costeo y la API de OS
+  contratos de catalog, incluida la división política (`catalog/tests/`), la resolución de
+  destinos, el costeo y la API de OS
   (`logistica/tests/`), la API de tarifarios (`transportista/tests/`) y la geolocalización de la
   ingesta (`tracking/tests/`); el frontend tiene las conversiones geo, el cableado de los dos
   mapas, los helpers de fecha y dinero (`lib/`), el mapeo de errores de campo (`api/`) y la

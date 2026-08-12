@@ -10,8 +10,8 @@ export {
     zonasQueryOptions,
 } from "./api";
 export type {
+    GeoJSONMultiPolygon,
     GeoJSONPoint,
-    GeoJSONPolygon,
     TipoUbicacion,
     UbicacionIn,
     UbicacionOut,

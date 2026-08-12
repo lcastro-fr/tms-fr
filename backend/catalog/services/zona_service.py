@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from django.contrib.gis.gdal import GDALException
-from django.contrib.gis.geos import GEOSException, GEOSGeometry, MultiPoint, Point, Polygon
+from django.contrib.gis.geos import GEOSException, GEOSGeometry, MultiPoint, MultiPolygon, Point
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
 
@@ -26,7 +26,7 @@ class ZonaService:
         pass
 
     @staticmethod
-    def _check_geom(geom: Polygon) -> None:
+    def _check_geom(geom: MultiPolygon) -> None:
         if geom.srid is not None and geom.srid != SRID_WGS84:
             raise ZonaService.GeometriaInvalidaError(
                 f"La geometría debe estar en SRID {SRID_WGS84}, llegó {geom.srid}",
@@ -41,18 +41,18 @@ class ZonaService:
             )
 
     @staticmethod
-    def _build_polygon(coordinates: list) -> Polygon:
+    def _build_multipolygon(coordinates: list) -> MultiPolygon:
         try:
-            geom = GEOSGeometry(json.dumps({"type": "Polygon", "coordinates": coordinates}))
+            geom = GEOSGeometry(json.dumps({"type": "MultiPolygon", "coordinates": coordinates}))
         except (GDALException, GEOSException, ValueError, TypeError) as exc:
             raise ZonaService.GeometriaInvalidaError(
                 f"No se pudo interpretar la geometría: {exc}",
                 detail={"error": str(exc)},
             ) from exc
 
-        if geom.geom_type != "Polygon":
+        if geom.geom_type != "MultiPolygon":
             raise ZonaService.GeometriaInvalidaError(
-                f"La geometría debe ser un Polygon, llegó {geom.geom_type}",
+                f"La geometría debe ser un MultiPolygon, llegó {geom.geom_type}",
                 detail={"geom_type": geom.geom_type},
             )
 
@@ -104,7 +104,7 @@ class ZonaService:
 
     @staticmethod
     def create_zona(nombre: str, coordinates: list) -> Zona:
-        geom = ZonaService._build_polygon(coordinates)
+        geom = ZonaService._build_multipolygon(coordinates)
         try:
             with transaction.atomic():
                 return Zona.objects.create(nombre=nombre, geom=geom)
@@ -116,7 +116,7 @@ class ZonaService:
 
     @staticmethod
     def update_zona(zona: Zona, nombre: str, coordinates: list) -> Zona:
-        geom = ZonaService._build_polygon(coordinates)
+        geom = ZonaService._build_multipolygon(coordinates)
         zona.nombre = nombre
         zona.geom = geom
         try:

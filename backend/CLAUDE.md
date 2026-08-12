@@ -36,7 +36,7 @@ hacia arriba.
 
 | App | Modelos | API | Notas |
 |---|---|---|---|
-| `catalog` | `Pais`, `Ubicacion`, `Zona` | zonas (CRUD) | Datos maestros y geo. Todos dependen de acá. |
+| `catalog` | `Pais`, `Ubicacion`, `Zona`, `Provincia`, `Departamento` | zonas (CRUD), división política (lectura) | Datos maestros y geo. Todos dependen de acá. |
 | `transportista` | `Transportista`, `Tarifario`, `TarifaFlete`, `ConceptoAdicional`, `TarifaConceptoAdicional` | tarifarios (CRUD) | Tarifarios con vigencia. El alta de transportistas y de conceptos sigue siendo sólo por admin. |
 | `logistica` | `OrdenServicio`, `OrdenServicioDestino`, `CostoOrdenServicio` | órdenes de servicio (lectura y edición) | El use case del costo vive en `tracking`, no acá. |
 | `tracking` | `Ticket`, `Remito`, `RemitoDestino` | ingesta, costo de OS | La punta de entrada. |
@@ -105,7 +105,7 @@ saberlo antes de buscarlo en `logistica/`.
 
 ## La API hoy
 
-Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **veintisiete operaciones**:
+Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **treinta operaciones**:
 
 | Método | Path | Auth | Entrada | Salida |
 |---|---|---|---|---|
@@ -129,6 +129,9 @@ Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **veintisiet
 | POST | `/api/v1/ubicaciones/` | `ubicaciones.crear` | `UbicacionCrearIn` | 201 `UbicacionOut` |
 | POST | `/api/v1/ubicaciones/geocodificar` | `ubicaciones.crear` **o** `.editar` | `GeocodificarUbicacionIn` | 200 `UbicacionGeocodificadaOut` |
 | PUT | `/api/v1/ubicaciones/{id}` | `ubicaciones.editar` | `UbicacionIn` | 200 `UbicacionOut` |
+| GET | `/api/v1/divisiones/provincias` | `zonas.ver` | — | 200 `list[ProvinciaOut]` |
+| GET | `/api/v1/divisiones/provincias/{codigo}/departamentos` | `zonas.ver` | — | 200 `list[DivisionOut]` |
+| POST | `/api/v1/divisiones/union` | `zonas.crear` **o** `.editar` | `UnionDivisionesIn` | 200 `UnionDivisionesOut` |
 | GET | `/api/v1/tarifarios/opciones` | `tarifarios.ver` | — | 200 `TarifarioOpcionesOut` |
 | GET | `/api/v1/tarifarios/` | `tarifarios.ver` | `Query[TarifariosFilters]` | 200 `list[TarifarioOut]` |
 | POST | `/api/v1/tarifarios/` | `tarifarios.crear` | `TarifarioIn` | 201 `TarifarioDetalleOut` |
@@ -574,9 +577,9 @@ Almacenamiento en UTC (`TIME_ZONE = "UTC"`, `USE_TZ = True`); la conversión a
 ## Geo
 
 PostGIS de verdad, no dos floats. `Ubicacion.coordinates` es un `PointField(srid=4326)`
-con `@property latitud`/`longitud` (`.y`/`.x`), y `Zona.geom` un `PolygonField(srid=4326)`.
+con `@property latitud`/`longitud` (`.y`/`.x`), y `Zona.geom` un `MultiPolygonField(srid=4326)`.
 
-Los DTOs `GeoJSONPolygon` y `GeoJSONPoint` usan orden GeoJSON, o sea **`[lng, lat]`**, no al
+Los DTOs `GeoJSONMultiPolygon` y `GeoJSONPoint` usan orden GeoJSON, o sea **`[lng, lat]`**, no al
 revés. Un SRID distinto de 4326 se rechaza con `BusinessRuleError`.
 
 ### El upsert de ubicaciones y `validada`
@@ -702,9 +705,63 @@ Cargar destinos explícitos **no lo pisa ni lo apaga**: la función queda igual 
 camino por default. Es la razón de que los once tests de `test_resolve_destinos.py` no se hayan
 tocado al agregar la tabla.
 
-`Zona.geom` es `PolygonField`, **no MultiPolygon**: una zona es exactamente un polígono, con
-sus anillos interiores si hace falta. Un anillo abierto no se cierra solo — muere en GEOS
-como 422 `business_rule`, así que el cliente manda el primer punto repetido al final.
+### Una zona es un MultiPolygon, y los datos lo forzaron
+
+`Zona.geom` **era** `PolygonField` con el argumento de que una zona es exactamente un polígono.
+Componer zonas desde la división política del INDEC lo rompió: la provincia de Buenos Aires es un
+MultiPolygon de **81 anillos** por las islas del Delta y las de Bahía Blanca, y 14 de los 527
+departamentos también lo son. Con `PolygonField` la feature no podía expresar su caso más común, y
+tampoco podía expresar "Chubut más Misiones", que es una zona legítima.
+
+Un anillo abierto sigue sin cerrarse solo — muere en GEOS como 422 `business_rule`, así que el
+cliente manda el primer punto repetido al final (`cerrarAnillos()` del frontend lo garantiza).
+`ZonaService._build_multipolygon` rechaza con 422 cualquier cosa que no sea un MultiPolygon, así
+que un `Polygon` pelado es `payload_invalid` del DTO, no un 500 de la columna.
+
+La migración `catalog.0008` es **a mano y no puede no serlo**: el `AlterField` que genera Django
+emite el `ALTER COLUMN ... TYPE geometry(MultiPolygon,4326)` **sin `USING`**, y Postgres rechaza el
+cast implícito de `geometry(Polygon)` en cuanto hay una fila. Va con `SeparateDatabaseAndState`
+más un `RunSQL` con `ST_Multi(geom)`; la vuelta es `ST_GeometryN(geom, 1)`, con pérdida.
+
+### Zonas compuestas por división política
+
+`Provincia` (24) y `Departamento` (527) son datos maestros de sólo lectura, cargados con
+`import_divisiones` desde los CSV del INDEC 2022 de `seed/`. Heredan de un abstracto
+`DivisionPolitica` y su **PK es el código del INDEC**, como `Pais`: 2 dígitos una provincia, 5 un
+departamento. `codigo` se declara en cada concreto y no en el abstracto porque Django no deja
+sobreescribir un campo heredado y los largos difieren.
+
+**Cada uno guarda dos geometrías, y confundirlas es el bug fácil de esta feature:**
+
+- `geom` es la resolución completa y es **la única fuente de la unión**.
+- `geom_display` está simplificada a `TOLERANCIA_DISPLAY` (0,005° ≈ 550 m) y es lo único que viaja
+  por la API, para el selector. Los 527 departamentos son 1,1 M de vértices completos y 34 k
+  simplificados.
+
+`POST /divisiones/union` es un **preview que no escribe nada**, igual que
+`/ubicaciones/geocodificar`, y por eso no lleva `@transaction.atomic`. Une con el agregado
+`Union("geom")` —un aggregate por tabla, compuestos con `GEOSGeometry.union()`— y simplifica el
+resultado a `TOLERANCIA_ZONA` (0,001° ≈ 110 m). Medido: la provincia de Buenos Aires baja de
+22.658 vértices y 527 KB de GeoJSON a **2.718 vértices y 58 KB**, en 84 ms; el país entero son
+691 ms. Se simplifica **al escribir y no al leer** porque `GET /zonas/` no pagina y devuelve la
+geometría completa de todas las zonas: visualizar cinco zonas grandes serían 2,6 MB.
+`poligonos`, `vertices` y `superficie_km2` viajan en el DTO porque simplificar es una pérdida y
+tiene que verse; misma regla que `destinos_sin_geolocalizar`.
+
+Dos cosas que la simplificación obliga a manejar: `.simplify()` puede **colapsar un MultiPolygon a
+Polygon** (hay que reenvolverlo, o la columna lo rechaza), y `SimplifyPreserveTopology` conserva la
+topología de cada componente pero **puede cruzar dos componentes entre sí** — ahí el
+`ZonaService._check_geom` reusado lo convierte en un 422 ruidoso.
+
+**La zona no guarda qué divisiones se marcaron, y es a propósito.** No hay tabla de procedencia: el
+resultado se siembra en el editor del mapa y se puede retocar a mano, así que una selección guardada
+dejaría de describir la geometría en la primera edición. Guardarla sería una mentira silenciosa.
+
+`DivisionService.list_provincias` lleva un **`order_by("nombre")` explícito y no es opcional**:
+Django ignora `Meta.ordering` en cuanto la query agrupa, y `cantidad_departamentos` es un `Count`.
+Sin esa línea el `<Select>` lista las 24 provincias en orden arbitrario. Un código que no existe es
+**422 `business_rule` con `detail.codigos`, no 404**, por el mismo criterio que `replace_destinos`
+con un `ubicacion_id` inventado: un 404 en esta operación se leería como "no existe la zona".
 
 ## Convenciones de código
 
@@ -771,7 +828,19 @@ uv run manage.py createsuperuser    # para el admin, y pasa todo el RBAC
 códigos al enum. Los roles y su asignación se cargan desde el admin.
 
 También hay `import_ubicaciones`, que levanta los xlsx de `seed/` (compose los monta en
-`/app/seed:ro`) usando `shared/xlsx.py`.
+`/app/seed:ro`) usando `shared/xlsx.py`, y `import_divisiones`, que carga las 24 provincias y los
+527 departamentos del INDEC desde los **CSV** de `seed/` (ahí `shared/xlsx.py` no aplica: va
+`csv.DictReader`). Los dos son idempotentes por código y tienen `--dry-run`.
+
+Tres cosas de `import_divisiones` que no son opcionales:
+
+- **`csv.field_size_limit(10**9)`.** El default de Python son 131.072 bytes por campo y hay filas
+  con 500 KB de GeoJSON: sin eso el import muere en la primera provincia grande.
+- **La FK sale de `codigo[:2]`, no de la columna `Código de provincia`**, porque esa columna tiene
+  errores: `30105 Victoria` viene como Santa Fe cuando su propio código dice Entre Ríos. El command
+  reporta la discrepancia y sigue.
+- **`geom_display` se calcula al insertar**, en Python con `.simplify(TOLERANCIA_DISPLAY, True)`.
+  Toda la corrida son ~7 s y ~20 MB de geometría.
 
 Con el stack completo arriba, la ingesta se dispara contra el proxy:
 
@@ -791,7 +860,10 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
 - **`catalog/paises.py` tiene una sola entrada.** La tabla `Pais` arranca con Argentina y nada
   más; hasta que se complete la lista, cualquier destino extranjero de SAP cae en
   `destinos_sin_pais` y su OS no se puede costear.
-- **Los tests son los de auth/RBAC (`conftest.py` + `users/tests/`), los de catalog, los de
+- **Los tests son los de auth/RBAC (`conftest.py` + `users/tests/`), los de catalog —incluida la
+  API de división política y `DivisionService`: la unión de dos vecinos da un polígono, la de dos
+  disjuntos da dos, la superficie no cuenta dos veces un departamento de una provincia ya marcada,
+  y el orden de las provincias, que sin `order_by` explícito es arbitrario—, los de
   `logistica/tests/` (resolución de destinos por vía, destinos explícitos de la OS, costeo y la
   API de órdenes de servicio),
   los de `transportista/tests/` (la API de tarifarios: alta con hijos, XOR, duplicados,
@@ -849,7 +921,8 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
   constraint, no el queryset.
 - **Sin paginación.** `GET /zonas/` devuelve todas las zonas activas con su polígono completo, y
   `GET /ubicaciones/` **las ~1785 filas del seed** en una sola respuesta (~350 KB). Es el primer
-  candidato real a paginar. `UbicacionesFilters` sólo filtra por `validada`; un `con_coordenadas`
+  candidato real a paginar, y desde que una zona puede ser una provincia entera pesa más: ~58 KB
+  por zona grande, que es justamente por qué la unión se guarda simplificada. `UbicacionesFilters` sólo filtra por `validada`; un `con_coordenadas`
   sería el próximo filtro obvio, porque el mapa sólo dibuja las geolocalizadas.
 - **`UbicacionOut` expone un subconjunto** de la fila (lo que el mapa necesita más la
   dirección). Agregar campos es aditivo y no rompe al frontend.
@@ -865,10 +938,16 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
   etc.). Un campo largo de SAP es un `DataError` de Postgres → 500 con rollback, donde debería
   ser un 422 `payload_invalid`. `CodigoUbicacion` ya existe para esto y se usa en
   `planta_codigo`, pero no acá.
-- **El mount `./seed:/app/seed:ro` no existe en `docker-compose.yml`**, aunque este documento lo
-  daba por hecho. `import_ubicaciones` sin `--file` busca `/app/seed/locales.xlsx` y falla; hay
-  que pasar `--file` o agregar el mount. `backend/seed/` es el directorio huérfano que dejó ese
-  mount cuando existía.
+- **Los municipios del INDEC están en `seed/` y quedaron fuera de alcance a propósito.** Son
+  **ejidos municipales, no una teselación**: cubren el 51,3 % del país. Buenos Aires, Chaco,
+  Mendoza y Salta están al 100 %, pero Santa Fe 20 %, Entre Ríos 22 %, Río Negro 21 %, Córdoba
+  5,6 %, Santiago del Estero 0,2 %, Santa Cruz 0,1 %, y CABA no tiene ninguno. Una zona armada con
+  municipios de Santa Fe son islas urbanas con agujeros, y un destino en el hueco no cae en ninguna
+  zona: `_resolve_por_zona` falla con `sin_zona_comun`. Los departamentos cubren el **99,9 %** y en
+  Buenos Aires **son** los partidos (los 135 códigos y nombres coinciden con los de municipios). No
+  cargar `seed/Municipios (2022).csv` sin resolver antes ese agujero.
+- **`Provincia` y `Departamento` no tienen centroide.** El CSV lo trae y no se guardó: el mapa
+  encuadra con `boundsDe()` sobre la geometría que ya bajó. Lo pide el paso 4, no este.
 - **`ALLOWED_HOSTS` tiene default vacío.** Con `DEBUG=False` y la variable sin setear,
   Django rechaza todo.
 - **No hay `STATIC_ROOT` ni `collectstatic`.** Los estáticos del admin se sirven sólo con

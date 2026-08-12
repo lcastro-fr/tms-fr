@@ -5,7 +5,7 @@ import type { components } from "../../api/schema";
 
 export type ZonaOut = components["schemas"]["ZonaOut"];
 export type ZonaIn = components["schemas"]["ZonaIn"];
-export type GeoJSONPolygon = components["schemas"]["GeoJSONPolygon"];
+export type GeoJSONMultiPolygon = components["schemas"]["GeoJSONMultiPolygon"];
 export type UbicacionOut = components["schemas"]["UbicacionOut"];
 export type UbicacionIn = components["schemas"]["UbicacionIn"];
 export type UbicacionesFilters = components["schemas"]["UbicacionesFilters"];
@@ -21,6 +21,10 @@ export type UbicacionOpcionesOut = components["schemas"]["UbicacionOpcionesOut"]
 export type PaisOpcionOut = components["schemas"]["PaisOpcionOut"];
 export type GeocodificarUbicacionIn = components["schemas"]["GeocodificarUbicacionIn"];
 export type UbicacionGeocodificadaOut = components["schemas"]["UbicacionGeocodificadaOut"];
+export type ProvinciaOut = components["schemas"]["ProvinciaOut"];
+export type DivisionOut = components["schemas"]["DivisionOut"];
+export type UnionDivisionesIn = components["schemas"]["UnionDivisionesIn"];
+export type UnionDivisionesOut = components["schemas"]["UnionDivisionesOut"];
 
 export const zonasKeys = {
     all: ["zonas"] as const,
@@ -32,6 +36,12 @@ export const ubicacionesKeys = {
     all: ["ubicaciones"] as const,
     lista: (filters: UbicacionesFilters) => ["ubicaciones", "lista", filters] as const,
     opciones: () => ["ubicaciones", "opciones"] as const,
+};
+
+export const divisionesKeys = {
+    all: ["divisiones"] as const,
+    provincias: () => ["divisiones", "provincias"] as const,
+    departamentos: (codigo: string) => ["divisiones", "departamentos", codigo] as const,
 };
 
 export const zonasQueryOptions = () =>
@@ -98,5 +108,31 @@ export async function geocodificarUbicacion(
         "/ubicaciones/geocodificar",
         payload,
     );
+    return data;
+}
+
+// División política del INDEC (2022): datos maestros de sólo lectura que no cambian.
+// La geometría que viaja acá es la simplificada, de dibujo: la unión se calcula en el backend.
+export const provinciasQueryOptions = () =>
+    queryOptions({
+        queryKey: divisionesKeys.provincias(),
+        queryFn: () =>
+            http.get<ProvinciaOut[]>("/divisiones/provincias").then((r) => r.data),
+        staleTime: Infinity,
+    });
+
+export const departamentosQueryOptions = (provinciaCodigo: string) =>
+    queryOptions({
+        queryKey: divisionesKeys.departamentos(provinciaCodigo),
+        queryFn: () =>
+            http
+                .get<DivisionOut[]>(`/divisiones/provincias/${provinciaCodigo}/departamentos`)
+                .then((r) => r.data),
+        staleTime: Infinity,
+    });
+
+/** Preview: no guarda nada, devuelve la geometría que se va a sembrar en el editor. */
+export async function unirDivisiones(payload: UnionDivisionesIn): Promise<UnionDivisionesOut> {
+    const { data } = await http.post<UnionDivisionesOut>("/divisiones/union", payload);
     return data;
 }

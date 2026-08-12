@@ -276,6 +276,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/divisiones/provincias": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Provincias del INDEC con su geometría simplificada */
+        get: operations["listarProvincias"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/divisiones/provincias/{provincia_codigo}/departamentos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Departamentos de una provincia */
+        get: operations["listarDepartamentos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/divisiones/union": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Une las divisiones marcadas y devuelve la geometría, sin guardar nada */
+        post: operations["unirDivisiones"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tarifarios/opciones": {
         parameters: {
             query?: never;
@@ -802,16 +853,16 @@ export interface components {
          * @enum {string}
          */
         Via: "aerea" | "maritima" | "terrestre";
-        /** GeoJSONPolygon */
-        GeoJSONPolygon: {
+        /** GeoJSONMultiPolygon */
+        GeoJSONMultiPolygon: {
             /**
              * Type
-             * @default Polygon
+             * @default MultiPolygon
              * @constant
              */
-            type: "Polygon";
+            type: "MultiPolygon";
             /** Coordinates */
-            coordinates: number[][][];
+            coordinates: number[][][][];
         };
         /** ZonaOut */
         ZonaOut: {
@@ -821,13 +872,13 @@ export interface components {
             nombre: string;
             /** Active */
             active: boolean;
-            geom: components["schemas"]["GeoJSONPolygon"];
+            geom: components["schemas"]["GeoJSONMultiPolygon"];
         };
         /** ZonaIn */
         ZonaIn: {
             /** Nombre */
             nombre: string;
-            geom: components["schemas"]["GeoJSONPolygon"];
+            geom: components["schemas"]["GeoJSONMultiPolygon"];
         };
         /** UbicacionesFilters */
         UbicacionesFilters: {
@@ -932,6 +983,45 @@ export interface components {
             nombre: string;
             tipo: components["schemas"]["TipoUbicacion"];
             coordinates: components["schemas"]["GeoJSONPoint"];
+        };
+        /** ProvinciaOut */
+        ProvinciaOut: {
+            /** Codigo */
+            codigo: string;
+            /** Nombre */
+            nombre: string;
+            /** Superficie Km2 */
+            superficie_km2: string;
+            geom: components["schemas"]["GeoJSONMultiPolygon"];
+            /** Cantidad Departamentos */
+            cantidad_departamentos: number;
+        };
+        /** DivisionOut */
+        DivisionOut: {
+            /** Codigo */
+            codigo: string;
+            /** Nombre */
+            nombre: string;
+            /** Superficie Km2 */
+            superficie_km2: string;
+            geom: components["schemas"]["GeoJSONMultiPolygon"];
+        };
+        /** UnionDivisionesOut */
+        UnionDivisionesOut: {
+            geom: components["schemas"]["GeoJSONMultiPolygon"];
+            /** Poligonos */
+            poligonos: number;
+            /** Vertices */
+            vertices: number;
+            /** Superficie Km2 */
+            superficie_km2: string;
+        };
+        /** UnionDivisionesIn */
+        UnionDivisionesIn: {
+            /** Provincias */
+            provincias?: string[];
+            /** Departamentos */
+            departamentos?: string[];
         };
         /** ConceptoAdicionalOut */
         ConceptoAdicionalOut: {
@@ -2796,6 +2886,261 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UbicacionOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listarProvincias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProvinciaOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    listarDepartamentos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provincia_codigo: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DivisionOut"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    unirDivisiones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnionDivisionesIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnionDivisionesOut"];
                 };
             };
             /** @description Bad Request */

@@ -22,13 +22,15 @@ El frontend va detrás del backend, no delante. **Sólo se construyen pantallas 
 endpoints que existen.** Nada de inventar rutas ni mockear respuestas para adelantar UI:
 si falta el endpoint, el trabajo es en `../backend`.
 
-Hoy la API tiene veintisiete operaciones: cuatro de auth, cinco del CRUD de zonas
+Hoy la API tiene treinta operaciones: cuatro de auth, cinco del CRUD de zonas
 (`/api/v1/zonas/`), cinco de ubicaciones (`/api/v1/ubicaciones/`: lista con filtros, opciones,
-alta, geocodificar y PUT), cinco de
+alta, geocodificar y PUT), tres de división política (`/api/v1/divisiones/`: provincias,
+departamentos de una provincia y el POST de la unión), cinco de
 órdenes de servicio (`/api/v1/ordenes-servicio/`: opciones, lista con filtros, detalle, PUT y el
 POST del costo), siete de tarifarios (`/api/v1/tarifarios/`: opciones, lista con filtros, detalle,
 POST, PUT, cierre de vigencia y DELETE) y una de máquina. Zonas, ubicaciones, órdenes de servicio
-y tarifarios son las cuatro pantallas de dominio. Tickets sigue teniendo sólo la ingesta desde SAP,
+y tarifarios son las cuatro pantallas de dominio; división política no tiene pantalla propia, la
+consume el formulario de zona. Tickets sigue teniendo sólo la ingesta desde SAP,
 que es máquina a máquina; le falta API de lectura.
 
 ## Arquitectura
@@ -54,9 +56,20 @@ features/catalog/
   api.ts             queryOptions y mutations. El único lugar que escribe URLs.
   zonas-columns.tsx  column defs de TanStack Table
   use-ubicaciones.ts la capa opcional de puntos: permiso + toggle + query
+  use-divisiones.ts  provincia elegida + qué está marcado + las dos queries
   components/        formularios y vistas del dominio
   index.ts           la única superficie pública
 ```
+
+**`use-divisiones.ts` copia el molde de `use-ubicaciones.ts` y por la misma razón:** el estado lo
+consumen dos componentes que están en lados opuestos del árbol —`SelectorDivisiones`, afuera del
+mapa, y `CapaDivisiones`, adentro—, así que el modal llama al hook una vez y le pasa piezas a cada
+uno. Es el mismo reparto que `ControlUbicaciones` / `CapaUbicaciones`.
+
+Lo que sí tiene de más es que es dueño de **tres estados que no son lo mismo** y conviene no
+confundir: `provinciasElegidas` es el alcance (qué se lista y se dibuja), `provinciasMarcadas` son
+las provincias que entran **enteras** a la zona, y `departamentosMarcados` los departamentos
+sueltos. El invariante que mantiene es que las marcas son siempre un subconjunto del alcance.
 
 `features/catalog` importa `features/auth` por su `index.ts`, para `usePermisos()` y `<Can>`.
 Es legal: la dirección única de dependencias ordena la cadena de dominio
@@ -323,10 +336,23 @@ confinada a `components/` y a `EditorPolygono`. Los componentes declarativos (`P
 - **Al dibujar una zona existente para editarla se descarta el vértice de cierre.** Leaflet
   cierra los anillos solo; dejarlo apila dos handles de vértice sobre el primer punto, y
   arrastrar uno corrompe el anillo sin avisar.
-- **Una zona es un solo `Polygon`.** `pm:create` reemplaza la figura anterior, y `cutPolygon`
-  está apagado: un corte que parte la zona en dos produce un `MultiPolygon` que
-  `Zona.geom` no puede guardar. `drawCircle`/`drawCircleMarker` también están apagados porque
-  exportan un `Point`.
+- **Una zona es un `MultiPolygon` y vive en una sola capa de Leaflet.** `pm:create` reemplaza la
+  figura anterior. `cutPolygon` **está prendido** desde que `Zona.geom` es MultiPolygon: partir la
+  zona en dos ahora es legal, y con eso desapareció el prop `onMultiPolygon` que existía sólo para
+  avisar que no se podía guardar. `drawCircle`/`drawCircleMarker` siguen apagados porque exportan
+  un `Point`.
+- **`toGeoJSON()` devuelve `Polygon` cuando la capa tiene un solo polígono**, no `MultiPolygon`, así
+  que `EditorPolygono` normaliza envolviendo las coordenadas en un nivel más. Sin eso el POST manda
+  un `Polygon` y el backend lo rechaza con 422 — ruidoso, pero por una razón que no se ve desde la
+  UI. `aLatLngs()` devuelve `LatLng[][][]`, que es exactamente lo que `L.polygon()` y
+  `<Polygon positions>` aceptan para un multipolígono: no hubo que cambiar cómo se dibuja.
+- **El editor se puede *sembrar* desde afuera, y el prop es `semilla: { geom, version }`.** Es como
+  llega al mapa la geometría que compuso el selector de divisiones. Va gateado por `version` y no
+  por identidad de `geom`, porque `EditorPolygono` lee `valor` **una sola vez** a propósito (para no
+  realimentarse con lo que él mismo emite): depender de la semilla entera re-sembraría en cada
+  render del padre y **pisaría lo que el usuario acabó de retocar a mano**. El mismo gateo aplica al
+  `bounds` que reencuadra. Está cubierto en `EditorPolygono.test.tsx`, en los dos sentidos: una
+  versión nueva reemplaza, la misma versión no toca nada.
 - **Los eventos de edición se escuchan en la capa, no en el mapa.** `_fireUpdate` y
   `_fireDragEnd` de geoman hacen `layer.fire(type, data, false)`: sin propagación. Sólo
   `pm:create` y `pm:remove` llegan al mapa. Escuchar `pm:update` en el mapa hace que editar una
@@ -533,10 +559,15 @@ Los archivos de test cubren exactamente lo que es silencioso cuando se rompe:
   ayer, porque si no lo del día no se ve al entrar a la pantalla.
 - `src/lib/geojson.test.ts` — las conversiones `[lng,lat]`↔`[lat,lng]` y el cierre de anillos.
   Es el que más paga: `lib/geojson.ts` no importa leaflet, y un polígono invertido se dibuja
-  en otro continente sin tirar un error.
+  en otro continente sin tirar un error. Desde MultiPolygon cubre además el nivel de anidamiento
+  extra: que los polígonos queden **separados** (unirlos dibujaría una zona que no existe), que se
+  cierren todos los anillos y no sólo el primero, y que el bounding box los abarque todos.
 - `src/features/catalog/components/EditorPolygono.test.tsx` — el cableado de geoman: montar y
   desmontar con los modos activos, y que los eventos de edición lleguen al `onChange`. Monta
-  Leaflet de verdad con un `getBoundingClientRect` falso.
+  Leaflet de verdad con un `getBoundingClientRect` falso. Suma lo de MultiPolygon: que emita
+  `MultiPolygon` aunque la capa tenga un solo polígono (`toGeoJSON()` devuelve `Polygon` ahí), que
+  una zona disjunta se dibuje en una sola capa, y el gateo por `version` de la semilla en los dos
+  sentidos.
 - `src/components/SelectorPunto.test.tsx` — el click del mapa emite `[lng, lat]`, y el marcador
   es arrastrable y **no** usa el ícono default (`icon.options.iconUrl` tiene que ser `undefined`).
 - `src/components/DataTable.test.tsx` — el orden y la búsqueda global. Del orden: el ciclo
@@ -560,7 +591,7 @@ el cableado, no el render.
 
 - **Hay cuatro pantallas de dominio: `/zonas`, `/ubicaciones`, `/ordenes-servicio` y
   `/tarifarios`.** Zonas tiene
-  alta, edición y baja con mapa, más la capa opcional de puntos. Ubicaciones tiene **alta y
+  alta, edición y baja con mapa, la capa opcional de puntos y el armado por división política. Ubicaciones tiene **alta y
   edición, sin baja**: la mayoría nacen de la ingesta de SAP, pero un expreso o un puerto no los
   manda nadie, así que hay alta propia con geolocalización asistida. Suma dos filtros (pendientes
   de validar, sin coordenada) y el punto elegido en el mapa. Órdenes de servicio es **sólo
@@ -568,6 +599,44 @@ el cableado, no el render.
   búsqueda por número de ticket o remito, rango de fecha de viaje, tres switches, la columna de
   ticket, el detalle con tickets y remitos, los destinos a facturar y el cálculo del costo.
   Tarifarios es el CRUD completo.
+- **Una zona se puede componer marcando provincias y departamentos, y el resultado sigue siendo
+  editable a mano.** El modal tiene dos pestañas —**Dibujar** y **División política**— pero **un
+  solo mapa**, montado afuera de los `Tabs`: cambiar de pestaña no lo remonta ni pierde lo dibujado,
+  y "componer" no es un modo aparte sino otra forma de sembrar el mismo editor. Por eso tampoco hay
+  procedencia guardada: lo que se guarda es geometría, y el backend no sabe de dónde salió.
+- **Los controles van al costado del mapa, no arriba.** Con el selector arriba —select, checkbox de
+  provincia entera, filtro, la lista scrolleable de departamentos, los badges y los dos botones— el
+  mapa quedaba abajo del fold, justo cuando lo que la pantalla viene a resolver es *ver* el polígono
+  mientras se marca. La columna izquierda es fija en 340 px y el mapa toma el resto.
+- **El selector de provincias es múltiple, porque una zona puede cruzar provincias.** El
+  `MultiSelect` es el **alcance** del armado, no un foco: de todas las provincias elegidas se
+  listan y se dibujan los departamentos a la vez, y la lista va **agrupada con un encabezado por
+  provincia**. Agrupar no es cosmético: hay homónimos entre provincias (dos "San Martín", dos
+  "Belgrano"), y una lista plana los volvería indistinguibles.
+- **Sacar una provincia del alcance se lleva sus marcas.** Lo hace `elegirProvincias` en el hook,
+  filtrando los dos sets por el prefijo de 2 dígitos. Conservarlas dejaría códigos en el payload
+  que no están en pantalla y que no hay forma de destildar: selección invisible, que es la falla
+  silenciosa de esta pantalla.
+- **Los departamentos de las provincias elegidas se dibujan como malla clickeable**
+  (`CapaDivisiones`): click en el mapa marca y desmarca, igual que el checkbox de la lista. Con una
+  provincia entera marcada sus checkboxes van `disabled` **y el click del mapa también se ignora**
+  — el guard vive en `toggleDepartamento` del hook y no en los componentes, porque son dos caminos
+  hacia la misma acción y sumar un departamento ya incluido mandaría el mismo polígono dos veces.
+  Ojo que eso es **por provincia**: con Chubut entera marcada, los departamentos de Misiones siguen
+  vivos.
+- **Los departamentos se piden por provincia con `useQueries`, nunca los 527 juntos.** Una query
+  por provincia elegida, con `staleTime: Infinity` porque son datos del INDEC 2022 que no cambian:
+  agregar y sacar provincias del alcance no vuelve a pegarle a la red. La geometría que baja es la
+  **simplificada**; la unión de verdad la calcula el backend sobre la resolución completa.
+- **El memo de `grupos` se ancla en una clave derivada y no en el array de `useQueries`**, que es
+  nuevo en cada render. La clave son los largos de cada `data`, y es sólida justamente porque los
+  departamentos de una provincia son inmutables. De `grupos` cuelgan `departamentos`,
+  `codigosDibujadosMarcados` y el efecto que cachea nombres para los badges.
+- **El `<Alert>` de "Geometría compuesta" dice polígonos, vértices y km², y eso es la regla de no
+  fallar en silencio.** El backend simplifica el contorno para que la zona sea liviana —Buenos Aires
+  entera pasa de 22.658 vértices a 2.718— y el número que se muestra es el de después: es una
+  pérdida, y tiene que verse antes de guardar. El conteo de polígonos es lo que explica que Buenos
+  Aires sean "81 polígonos separados": son las islas del Delta.
 - **La OS tiene su propia lista de destinos, y es el segundo formulario con listas dinámicas.**
   `FilasDestinoOrden` copia el molde de `FilasTarifaFlete` (`insertListItem`/`removeListItem`,
   `<Select searchable limit={50}>` para las ~1793 ubicaciones, el error de fila entera renderizado

@@ -42,6 +42,7 @@ services:
       - backend_net
     volumes:
       - ./backend:/app
+      - ./seed:/app/seed:ro
     depends_on:
       db:
         condition: service_healthy

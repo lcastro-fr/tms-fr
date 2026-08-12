@@ -4,10 +4,13 @@ from .crear_ubicacion import CrearUbicacionUseCase
 from .crear_zona import CrearZonaUseCase
 from .eliminar_zona import EliminarZonaUseCase
 from .geocodificar_ubicacion import GeocodificarUbicacionUseCase
+from .listar_departamentos import ListarDepartamentosUseCase
+from .listar_provincias import ListarProvinciasUseCase
 from .listar_ubicaciones import ListarUbicacionesUseCase
 from .listar_zonas import ListarZonasUseCase
 from .obtener_zona import ObtenerZonaUseCase
 from .opciones_ubicacion import OpcionesUbicacionUseCase
+from .unir_divisiones import UnirDivisionesUseCase
 
 __all__ = [
     "ActualizarUbicacionUseCase",
@@ -16,8 +19,11 @@ __all__ = [
     "CrearZonaUseCase",
     "EliminarZonaUseCase",
     "GeocodificarUbicacionUseCase",
+    "ListarDepartamentosUseCase",
+    "ListarProvinciasUseCase",
     "ListarUbicacionesUseCase",
     "ListarZonasUseCase",
     "ObtenerZonaUseCase",
     "OpcionesUbicacionUseCase",
+    "UnirDivisionesUseCase",
 ]

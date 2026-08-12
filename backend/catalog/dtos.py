@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import TYPE_CHECKING, Annotated, Literal, Self
 
 from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
@@ -8,7 +9,9 @@ from catalog.enums import TipoUbicacion
 from shared.dtos import OpcionOut
 
 if TYPE_CHECKING:
-    from catalog.models import Pais, Ubicacion, Zona
+    from django.contrib.gis.geos import MultiPolygon
+
+    from catalog.models import Departamento, Pais, Provincia, Ubicacion, Zona
 
 CodigoUbicacion = Annotated[
     str,
@@ -19,7 +22,6 @@ CodigoUbicacion = Annotated[
     ),
 ]
 
-# Contra columnas NOT NULL: sin max_length un campo largo es un DataError → 500 en vez de 422.
 CalleUbicacion = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
 ]
@@ -29,11 +31,15 @@ LocalidadUbicacion = Annotated[
 CodigoPais = Annotated[
     str, StringConstraints(strip_whitespace=True, to_upper=True, min_length=2, max_length=2)
 ]
+# Código INDEC: 2 dígitos una provincia, 5 un departamento.
+CodigoDivision = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=2, max_length=5)
+]
 
 
-class GeoJSONPolygon(BaseModel):
-    type: Literal["Polygon"] = "Polygon"
-    coordinates: list[list[list[float]]] = Field(min_length=1)
+class GeoJSONMultiPolygon(BaseModel):
+    type: Literal["MultiPolygon"] = "MultiPolygon"
+    coordinates: list[list[list[list[float]]]] = Field(min_length=1)
 
 
 class GeoJSONPoint(BaseModel):
@@ -41,27 +47,33 @@ class GeoJSONPoint(BaseModel):
     coordinates: list[float] = Field(min_length=2, max_length=2)
 
 
+def multipolygon_out(geom: MultiPolygon) -> GeoJSONMultiPolygon:
+    # Desde .coords y no desde .json para no serializar y volver a parsear.
+    return GeoJSONMultiPolygon(
+        coordinates=[
+            [[list(punto) for punto in anillo] for anillo in poligono] for poligono in geom.coords
+        ]
+    )
+
+
 class ZonaIn(BaseModel):
     nombre: str = Field(min_length=1, max_length=120)
-    geom: GeoJSONPolygon
+    geom: GeoJSONMultiPolygon
 
 
 class ZonaOut(BaseModel):
     id: int
     nombre: str
     active: bool
-    geom: GeoJSONPolygon
+    geom: GeoJSONMultiPolygon
 
     @classmethod
     def from_model(cls, zona: Zona) -> ZonaOut:
-        # Desde .coords y no desde .json para no serializar y volver a parsear.
         return cls(
             id=zona.id,
             nombre=zona.nombre,
             active=zona.active,
-            geom=GeoJSONPolygon(
-                coordinates=[[list(punto) for punto in anillo] for anillo in zona.geom.coords]
-            ),
+            geom=multipolygon_out(zona.geom),
         )
 
 
@@ -196,3 +208,43 @@ class UbicacionOut(BaseModel):
             validada=ubicacion.validada,
             destino_default=ubicacion.destino_default,
         )
+
+
+class DivisionOut(BaseModel):
+    codigo: str
+    nombre: str
+    superficie_km2: Decimal
+    geom: GeoJSONMultiPolygon
+
+    @classmethod
+    def from_model(cls, division: Provincia | Departamento, **extra: object) -> Self:
+        return cls(
+            codigo=division.codigo,
+            nombre=division.nombre,
+            superficie_km2=division.superficie_km2,
+            # El simplificado: es lo único que el selector dibuja.
+            geom=multipolygon_out(division.geom_display),
+            **extra,
+        )
+
+
+class ProvinciaOut(DivisionOut):
+    cantidad_departamentos: int
+
+
+class UnionDivisionesIn(BaseModel):
+    provincias: list[CodigoDivision] = Field(default_factory=list, max_length=24)
+    departamentos: list[CodigoDivision] = Field(default_factory=list, max_length=527)
+
+    @model_validator(mode="after")
+    def exige_algun_codigo(self) -> Self:
+        if not self.provincias and not self.departamentos:
+            raise ValueError("Marcá al menos una provincia o un departamento")
+        return self
+
+
+class UnionDivisionesOut(BaseModel):
+    geom: GeoJSONMultiPolygon
+    poligonos: int
+    vertices: int
+    superficie_km2: Decimal

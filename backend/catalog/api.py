@@ -4,13 +4,17 @@ from django.http import HttpRequest
 from ninja import Query, Router
 
 from catalog.dtos import (
+    DivisionOut,
     GeocodificarUbicacionIn,
+    ProvinciaOut,
     UbicacionCrearIn,
     UbicacionesFilters,
     UbicacionGeocodificadaOut,
     UbicacionIn,
     UbicacionOpcionesOut,
     UbicacionOut,
+    UnionDivisionesIn,
+    UnionDivisionesOut,
     ZonaIn,
     ZonaOut,
 )
@@ -21,10 +25,13 @@ from catalog.use_cases import (
     CrearZonaUseCase,
     EliminarZonaUseCase,
     GeocodificarUbicacionUseCase,
+    ListarDepartamentosUseCase,
+    ListarProvinciasUseCase,
     ListarUbicacionesUseCase,
     ListarZonasUseCase,
     ObtenerZonaUseCase,
     OpcionesUbicacionUseCase,
+    UnirDivisionesUseCase,
 )
 from core.auth import SessionAuth
 from routing.factory import build_geocoder
@@ -33,6 +40,7 @@ from shared.permisos import PermisoCodigo
 
 zonas_router = Router(tags=["zonas"])
 ubicaciones_router = Router(tags=["ubicaciones"])
+divisiones_router = Router(tags=["divisiones"])
 
 
 @zonas_router.get(
@@ -154,3 +162,36 @@ def crear_ubicacion(request: HttpRequest, payload: UbicacionCrearIn):
 )
 def actualizar_ubicacion(request: HttpRequest, ubicacion_id: int, payload: UbicacionIn):
     return 200, ActualizarUbicacionUseCase.execute(ubicacion_id, payload)
+
+
+@divisiones_router.get(
+    "/provincias",
+    response={200: list[ProvinciaOut], **ERRORS},
+    auth=SessionAuth(PermisoCodigo.ZONAS_VER),
+    summary="Provincias del INDEC con su geometría simplificada",
+    operation_id="listarProvincias",
+)
+def listar_provincias(request: HttpRequest):
+    return 200, ListarProvinciasUseCase.execute()
+
+
+@divisiones_router.get(
+    "/provincias/{provincia_codigo}/departamentos",
+    response={200: list[DivisionOut], **ERRORS},
+    auth=SessionAuth(PermisoCodigo.ZONAS_VER),
+    summary="Departamentos de una provincia",
+    operation_id="listarDepartamentos",
+)
+def listar_departamentos(request: HttpRequest, provincia_codigo: str):
+    return 200, ListarDepartamentosUseCase.execute(provincia_codigo)
+
+
+@divisiones_router.post(
+    "/union",
+    response={200: UnionDivisionesOut, **ERRORS},
+    auth=SessionAuth(PermisoCodigo.ZONAS_CREAR, PermisoCodigo.ZONAS_EDITAR),
+    summary="Une las divisiones marcadas y devuelve la geometría, sin guardar nada",
+    operation_id="unirDivisiones",
+)
+def unir_divisiones(request: HttpRequest, payload: UnionDivisionesIn):
+    return 200, UnirDivisionesUseCase.execute(payload)

@@ -6,6 +6,9 @@ SRID_WGS84 = 4326
 
 PAIS_LOCAL = "AR"
 
+TOLERANCIA_ZONA = 0.001
+TOLERANCIA_DISPLAY = 0.005
+
 
 class DestinoDefault(StrEnum):
     PUERTO_MARITIMO = "puerto_maritimo"

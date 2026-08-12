@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ninja import NinjaAPI
 
-from catalog.api import ubicaciones_router, zonas_router
+from catalog.api import divisiones_router, ubicaciones_router, zonas_router
 from core.api_errors import register_exception_handlers
 from logistica.api import ordenes_servicio_router
 from tracking.api import ordenes_router
@@ -26,4 +26,5 @@ api.add_router("/ordenes-servicio/", ordenes_router)
 api.add_router("/ordenes-servicio/", ordenes_servicio_router)
 api.add_router("/zonas/", zonas_router)
 api.add_router("/ubicaciones/", ubicaciones_router)
+api.add_router("/divisiones/", divisiones_router)
 api.add_router("/tarifarios/", tarifarios_router)

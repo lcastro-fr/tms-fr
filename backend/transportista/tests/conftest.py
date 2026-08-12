@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from django.contrib.gis.geos import Point, Polygon
+from django.contrib.gis.geos import MultiPolygon, Point, Polygon
 
 from catalog.enums import PAIS_LOCAL, SRID_WGS84, TipoUbicacion
 from catalog.models import Pais, Ubicacion, Zona
@@ -48,7 +48,9 @@ def otro_transportista(db):
 
 @pytest.fixture
 def zona(db):
-    return Zona.objects.create(nombre="Norte", geom=Polygon(CUADRADO, srid=SRID_WGS84))
+    return Zona.objects.create(
+        nombre="Norte", geom=MultiPolygon(Polygon(CUADRADO), srid=SRID_WGS84)
+    )
 
 
 @pytest.fixture
