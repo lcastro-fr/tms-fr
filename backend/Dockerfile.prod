@@ -1,0 +1,41 @@
+FROM python:3.13-slim
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DJANGO_SETTINGS_MODULE=core.settings
+
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV UV_CACHE_DIR=/tmp/uv-cache
+ENV UV_NO_SYNC=1
+ENV PATH="/opt/venv/bin:$PATH"
+ENV HOME=/tmp
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    binutils \
+    libproj-dev \
+    gdal-bin \
+    libgdal-dev \
+    python3-gdal \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY .python-version pyproject.toml uv.lock /app/
+
+RUN uv sync --frozen --no-dev && rm -rf /tmp/uv-cache
+
+COPY . /app/
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# El volumen nombrado hereda el ownership del mountpoint al crearse.
+RUN groupadd -r app && useradd -r -g app -d /app -s /usr/sbin/nologin app \
+    && mkdir -p /app/staticfiles && chown app:app /app/staticfiles
+
+USER app
+
+EXPOSE 8000
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

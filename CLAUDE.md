@@ -63,21 +63,28 @@ endpoints que existen; si falta el endpoint, el trabajo es en `backend/`.
 ```
 backend/          Django. Ver backend/CLAUDE.md
 frontend/         SPA React. Ver frontend/CLAUDE.md
-nginx/            nginx.conf del proxy. Es lo que hace que todo sea same-origin.
+nginx/            nginx.conf (dev) y nginx.prod.conf. Es lo que hace que todo sea same-origin.
 seed/             datos reales para los import_* commands: xlsx de ubicaciones, y los CSV
                   del INDEC 2022 con los polígonos de provincias, departamentos y municipios
 scripts/          utilitarios sueltos de datos
 run-dev.sh        levanta el stack exportando DOCKER_UID/GID
+run-prod.sh       levanta el stack de producción (docker-compose.prod.yml + .env.prod)
 generar-tipos.sh  regenera frontend/src/api/schema.d.ts desde el openapi.json
 .env              en la raíz, porque compose lo necesita acá para interpolar
+.env.example      el molde de los dos: se copia a .env o a .env.prod
 ```
 
-Los dos `.sh` de la raíz van con `docker compose`, o sea que se corren **en el host**, no
+Los `.sh` de la raíz van con `docker compose`, o sea que se corren **en el host**, no
 adentro de un contenedor. `generar-tipos.sh` está explicado en `frontend/CLAUDE.md`: es un
 script y no un one-liner porque el `Host` que acepta Django, el Node que corre
 `openapi-typescript` y el filesystem que ve el contenedor no coinciden.
 
 ## Topología
+
+**Son dos topologías, una por compose**, y comparten la decisión que las define: un solo
+puerto expuesto, el 80, con la SPA y la API en el mismo origen.
+
+### Dev — `docker-compose.yml`
 
 Cuatro servicios en compose, y **un solo puerto expuesto: el 80**.
 
@@ -102,6 +109,46 @@ el proyecto y no hace falta.
 
 `STATIC_URL` es `api/static/` y no `static/`, a propósito: así los estáticos del admin
 caen dentro del `location /api/` del proxy y se sirven sin agregar una regla más.
+
+### Prod — `docker-compose.prod.yml`
+
+**Tres servicios, no cuatro: `web` desaparece.** Una SPA compilada no tiene proceso, son
+archivos, así que `frontend/Dockerfile.prod` es multi-stage y **termina en nginx**: esa imagen
+*es* el proxy. Se levanta con `./run-prod.sh`.
+
+| Servicio | Imagen / build | Publica | Rol |
+|---|---|---|---|
+| `db` | `postgis/postgis:17-3.5` | — | Igual que dev, pero **sin publicar el puerto** |
+| `api` | build `./backend` con `Dockerfile.prod` | — | gunicorn `core.wsgi:application` |
+| `proxy` | build `./frontend` con `Dockerfile.prod` | `80:80` | nginx: sirve el `dist` y los dos juegos de estáticos |
+
+```
+/api/static/  → alias al volumen static_data     los estáticos del admin, sin tocar Django
+/assets/      → el dist de Vite, immutable 1 año
+/api/         → api:8000/api/
+/admin/       → api:8000/admin/
+/             → try_files $uri /index.html        el fallback de la SPA
+```
+
+Cuatro cosas que sostienen esto:
+
+- **`name: tms-fr-prod`** en el compose. Con el mismo `name` que dev, `db_data_gis` sería el
+  mismo volumen y prod pisaría la base de desarrollo.
+- **`STATIC_ROOT` es `/app/staticfiles`, montado como el volumen `static_data`**, que el proxy
+  monta `:ro`. El entrypoint del `api` corre `collectstatic` en cada arranque y el proxy espera
+  por el healthcheck del `api`, así que nunca sirve un volumen vacío. La razón de que
+  `STATIC_URL` no tenga barra inicial es justamente ésta: Django emite `/api/static/…`, que es
+  el `location` que nginx resuelve desde el volumen.
+- **El volumen nombrado hereda el ownership del mountpoint de la imagen al crearse**, así que el
+  `chown app:app /app/staticfiles` del `Dockerfile.prod` es lo único que hace que
+  `collectstatic` pueda escribir. Es el mismo mecanismo que el `a+rwX` de `node_modules`.
+- **Ni `user:` ni bind mount del código.** El uid del host existía para los bind mounts; en prod
+  no hay ninguno y los contenedores corren el usuario `app` de su propia imagen.
+
+El deploy no lleva TLS: nginx escucha en el 80 y la terminación va delante o se agrega después.
+Mientras sea HTTP puro, `SESSION_COOKIE_SECURE` **tiene que quedar en `False`** — en `True` el
+browser nunca guarda la `sessionid` y el login falla sin un solo error. `check --deploy` avisa
+de HSTS, SSL redirect y esa cookie: son los tres esperados sin TLS.
 
 ## Los contenedores corren con el uid del host
 
@@ -207,7 +254,9 @@ Los de cada capa están en su documento. Estos cruzan las dos:
 - **El Node del host puede ser demasiado viejo para el frontend.** Vite 8 pide
   `^20.19 || >=22.12`. El contenedor `web` usa `node:24-slim` y cumple, pero si el host
   tiene menos que eso, `pnpm dev/build/test` sólo corren adentro del contenedor.
-- **No hay `.env.example`**, aunque el arranque lo asumía (`cp .env.example .env`).
+- **`.env.example` es el molde de los dos entornos y no está validado por nada.** Agregar una
+  variable a `settings.py` y no documentarla ahí no rompe nada: se descubre cuando algo se
+  queda en su default en el servidor.
 - **La cobertura es parcial y desigual.** El backend tiene auth/RBAC (`users/tests/`), los
   contratos de catalog, incluida la división política (`catalog/tests/`), la resolución de
   destinos, el costeo —incluido el desempate entre zonas solapadas— y la API de OS
@@ -218,6 +267,15 @@ Los de cada capa están en su documento. Estos cruzan las dos:
   Sin cobertura: `shared/models.py` —el borrado lógico, el código más delicado del repo—, y
   **no hay MSW**, así que en el frontend no se
   pueden testear estados de carga ni error del camino real de datos.
-- **No hay historia de producción.** El `Dockerfile` del frontend es single-stage de dev
-  (`CMD pnpm dev`) y el backend no tiene `STATIC_ROOT` ni `collectstatic`. Todo el setup
-  actual asume dev.
+- **El deploy de producción es a mano y no hay CI.** `./run-prod.sh` hace
+  `up -d --build` contra el host donde se corre: no hay registry, ni tags de imagen, ni
+  pipeline que buildee y testee antes. Un rollback es volver el checkout y rebuildear.
+- **No hay TLS.** nginx escucha en el 80 y listo. Agregarlo es cert + `listen 443 ssl` +
+  redirect, y del lado de Django `SECURE_PROXY_SSL_HEADER`, `SESSION_COOKIE_SECURE=True` y los
+  `SECURE_*` que hoy `check --deploy` reclama. El proxy ya reenvía `X-Forwarded-Proto $scheme`
+  para que ese día no haya que tocar nada más.
+- **El entrypoint del `api` migra en cada arranque.** Es cómodo con un contenedor y es una
+  carrera con dos: `migrate` y `sync_permisos` no están hechos para correr en paralelo. Escalar
+  el `api` pide sacarlos del entrypoint y hacerlos un paso de deploy aparte.
+- **`seed/` está gitignoreado**, así que los xlsx de ubicaciones y los CSV del INDEC hay que
+  copiarlos al servidor a mano antes de correr los `import_*`.

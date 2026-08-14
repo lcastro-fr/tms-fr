@@ -17,7 +17,7 @@ venv/
 # Django
 db.sqlite3
 db.sqlite3-journal
-/staticfiles/
+staticfiles/
 /media/
 *.log
 

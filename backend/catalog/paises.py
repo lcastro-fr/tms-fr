@@ -39,7 +39,7 @@ PAISES: list[tuple[str, str]] = [
     ("BZ", "Belice"),
     ("CA", "Canadá"),
     ("CC", "Islas Cocos"),
-    ("CD", "República Congo"),
+    ("CD", "Rep.Dem.Congo"),
     ("CF", "Rep.Centroafr."),
     ("CG", "República Congo"),
     ("CH", "Suiza"),

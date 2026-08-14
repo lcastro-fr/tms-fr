@@ -901,6 +901,25 @@ uv run ruff check --fix && uv run mypy .
 
 Antes de commitear: `uv run manage.py makemigrations --check --dry-run`.
 
+### El arranque en producción
+
+`Dockerfile.prod` es la misma imagen con tres diferencias: `uv sync --frozen --no-dev` (el
+`uv sync` de dev mete mypy, pytest y ruff adentro), un usuario `app` propio en vez del uid del
+host, y `docker-entrypoint.sh` en lugar de `runserver`. El entrypoint hace
+`migrate` → `collectstatic` → `sync_permisos` y después
+`exec gunicorn core.wsgi:application`.
+
+- **Worker `sync`, sin `--threads`.** Es la contracara de "todas las vistas son sincrónicas":
+  el modelo de concurrencia tiene que ser el que las transacciones aguantan.
+- **`--timeout 120`** y no el default de 30. `POST /divisiones/union` del país entero son
+  691 ms de CPU, pero `/ubicaciones/geocodificar` y la ingesta esperan a ORS y a SAP, y un
+  timeout corto mata el worker a mitad de request.
+- `sync_permisos` en cada arranque es lo que evita el paso manual después de un `migrate` que
+  agregue códigos al enum; es idempotente por diseño.
+- `CREATE EXTENSION pg_trgm` de `tracking.0002` pide superuser. Con el `db` del compose el
+  `APP_DB_USER` lo es; contra una base gestionada afuera, la extensión la crea un DBA **antes**
+  del primer deploy.
+
 Corriendo así, en el host, decouple sí lee el `.env` de la raíz completo (adentro del
 contenedor no; ver `../CLAUDE.md`).
 
@@ -1055,9 +1074,17 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
 - **`Provincia` y `Departamento` no tienen centroide.** El CSV lo trae y no se guardó: el mapa
   encuadra con `boundsDe()` sobre la geometría que ya bajó. Lo pide el paso 4, no este.
 - **`ALLOWED_HOSTS` tiene default vacío.** Con `DEBUG=False` y la variable sin setear,
-  Django rechaza todo.
-- **No hay `STATIC_ROOT` ni `collectstatic`.** Los estáticos del admin se sirven sólo con
-  `runserver` en DEBUG.
+  Django rechaza todo. En prod es obligatoria, y está documentada en `../.env.example`.
+- **No hay `/health`.** El healthcheck del `api` en prod es un TCP contra el 8000 y no un GET:
+  cualquier request con un `Host` que no esté en `ALLOWED_HOSTS` daría 400, así que un check
+  HTTP mediría lo que no hay que medir.
+- **El `migrate` de un fresh deploy es distinto del de dev.** En dev las migraciones se
+  aplicaron de a una a lo largo del tiempo; en prod corren todas de golpe contra una base
+  vacía, y ahí las data migrations ven la versión **de hoy** de sus fuentes. Ya mordió una vez:
+  `catalog.0004` siembra `PAISES` y el `CREATE UNIQUE INDEX` de `uq_pais_nombre` es
+  `deferred_sql`, o sea que corre **después** del `RunPython` de la misma migración — el
+  `ignore_conflicts=True` del `bulk_create` no protege nada porque al insertar el índice todavía
+  no existe. Dos países con el mismo `nombre` en `catalog/paises.py` abortan el deploy entero.
 - `routing/` **sólo tiene geocoding**: `Geocoder` + el adapter de ORS. El paso 4 le suma el
   ruteo, y ahí entra `ORS_SNAP_RADIUS_M`, que hoy está en settings y en compose **pero no lo
   lee nadie** (snappear es cosa del ruteo, no del geocoding). `routing/` no tiene tests.

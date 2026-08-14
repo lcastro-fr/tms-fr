@@ -1,0 +1,67 @@
+name: tms-fr-prod
+
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_USER: ${APP_DB_USER}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD}
+      POSTGRES_DB: ${APP_DB_NAME}
+    volumes:
+      - db_data_gis:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER} -d ${APP_DB_NAME} -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - backend_net
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    env_file:
+      - .env.prod
+    environment:
+      - APP_DB_HOST=db
+      - APP_DB_PORT=5432
+    volumes:
+      - static_data:/app/staticfiles
+      - ./seed:/app/seed:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - backend_net
+
+  proxy:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    ports:
+      - ${PROXY_PORT}:80
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_data:/var/www/api-static:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - backend_net
+
+
+volumes:
+  db_data_gis:
+  static_data:
+networks:
+  backend_net:

@@ -121,6 +121,8 @@ USE_TZ = True
 
 STATIC_URL = "api/static/"
 
+STATIC_ROOT = config("STATIC_ROOT", default=str(BASE_DIR / "staticfiles"))
+
 AUTH_USER_MODEL = "users.User"
 
 
