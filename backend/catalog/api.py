@@ -35,7 +35,7 @@ from catalog.use_cases import (
     UnirDivisionesUseCase,
 )
 from core.auth import SessionAuth
-from routing.factory import build_geocoder
+from lib.routing.factory import build_geocoder
 from shared.dtos import ERRORS
 from shared.permisos import PermisoCodigo
 

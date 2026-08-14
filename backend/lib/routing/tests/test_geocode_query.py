@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from routing.domain.values import Coordinate, GeocodeQuery, normalizar_pais
+from lib.routing.domain.values import Coordinate, GeocodeQuery, normalizar_pais
 
 
 def test_la_localidad_se_corta_en_el_guion():

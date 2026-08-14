@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from django.conf import settings
 
-from routing.adapters import OpenRouteServiceAdapter
-from routing.domain.exceptions import GeocoderNoConfiguradoError
-from routing.domain.ports import Geocoder
-from routing.domain.values import Coordinate, GeocodeQuery
+from lib.routing.adapters import OpenRouteServiceAdapter
+from lib.routing.domain.exceptions import GeocoderNoConfiguradoError
+from lib.routing.domain.ports import Geocoder
+from lib.routing.domain.values import Coordinate, GeocodeQuery
 
 
 class GeocoderNoConfigurado(Geocoder):

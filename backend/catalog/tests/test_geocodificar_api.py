@@ -4,7 +4,7 @@ import pytest
 
 from catalog.models import Pais
 from conftest import GeocoderFalso
-from routing.domain import Coordinate, RoutingError
+from lib.routing.domain import Coordinate, RoutingError
 from shared.permisos import PermisoCodigo
 
 pytestmark = pytest.mark.django_db

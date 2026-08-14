@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from routing.domain import Coordinate, GeocodeQuery, Geocoder, RoutingError
+from lib.routing.domain import Coordinate, GeocodeQuery, Geocoder, RoutingError
 from shared.permisos import PermisoCodigo
 from users.models import Permiso, Rol, RolPermiso, User, UsuarioRol
 from users.services import PermisoService

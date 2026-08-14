@@ -150,6 +150,10 @@ INGEST_API_KEY = config("INGEST_API_KEY", default="")
 
 TZ_OPERACION = config("TZ_OPERACION", default="America/Argentina/Buenos_Aires")
 
+# SAP
+SAP_ENDPOINT = config("SAP_ENDPOINT", default="")
+SAP_USERNAME = config("SAP_USERNAME", default="")
+SAP_PASSWORD = config("SAP_PASSWORD", default="")
 
 # Logging
 

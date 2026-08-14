@@ -66,11 +66,6 @@ export function OrdenesServicioPanel({
     );
     const [editando, setEditando] = useState<OrdenServicioOut | null>(null);
 
-    const sinCalcular = useMemo(
-        () => ordenes.filter((o) => o.costo === null).length,
-        [ordenes],
-    );
-
     const calcular = useMutation({
         mutationFn: (orden: OrdenServicioOut) =>
             calcularCostoOrdenServicio(orden.id),
@@ -212,10 +207,6 @@ export function OrdenesServicioPanel({
                     />
                     {cargando && <Loader size="xs" />}
                 </Group>
-                <Text c="dimmed" size="sm">
-                    {ordenes.length} órdenes
-                    {sinCalcular > 0 && `, ${sinCalcular} sin costo calculado`}
-                </Text>
             </Group>
 
             <DataTableExpandible

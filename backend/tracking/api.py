@@ -5,7 +5,7 @@ from ninja import Router
 
 from core.auth import IngestApiKeyAuth, SessionAuth
 from logistica.dtos import CostoOrdenServicioOut
-from routing.factory import build_geocoder
+from lib.routing.factory import build_geocoder
 from shared.dtos import ERRORS
 from shared.permisos import PermisoCodigo
 from tracking.dtos import TicketIngestIn, TicketIngestOut

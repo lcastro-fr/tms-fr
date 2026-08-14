@@ -7,9 +7,9 @@ from django.db import transaction
 from catalog.enums import TipoUbicacion
 from catalog.services import PaisService, UbicacionService
 from logistica.services import OrdenServicioService
-from routing.domain.exceptions import RoutingError
-from routing.domain.ports import Geocoder
-from routing.domain.values import GeocodeQuery
+from lib.routing.domain.exceptions import RoutingError
+from lib.routing.domain.ports import Geocoder
+from lib.routing.domain.values import GeocodeQuery
 from tracking.dtos import (
     DestinoSinGeolocalizarOut,
     DestinoSinPaisOut,
@@ -36,18 +36,18 @@ class IngestTicketUseCase:
         )
         planta = UbicacionService.get_ubicacion_by_codigo_or_raise(data.planta_codigo)
 
-        # Si existe un tarifario vigene, es facturable
-        facturable = True
-        try:
-            _ = TarifarioService.get_tarifario_at(transportista.id, data.fecha_ingreso)
-        except (TarifarioService.TarifarioNotFoundError, TarifarioService.TarifarioAmbiguoError):
-            facturable = False
+        # # Si existe un tarifario vigene, es facturable
+        # facturable = True
+        # try:
+        #     _ = TarifarioService.get_tarifario_at(transportista.id, data.fecha_ingreso)
+        # except (TarifarioService.TarifarioNotFoundError, TarifarioService.TarifarioAmbiguoError):
+        #     facturable = False
 
         orden_servicio = OrdenServicioService.create_orden_servicio(
             origen_id=planta.id,
             transportista_id=transportista.id,
             fecha_viaje=data.fecha_ingreso,
-            facturable=facturable,
+            facturable=data.facturable,
         )
 
         creados: list[str] = []
@@ -106,7 +106,7 @@ class IngestTicketUseCase:
                 destinos.append(ubicacion_instance)
 
             try:
-                RemitoService.create_remito(
+                _ = RemitoService.create_remito(
                     numero=remito.numero,
                     fecha=remito.fecha,
                     orden_servicio=orden_servicio,

@@ -3,9 +3,9 @@ from __future__ import annotations
 import openrouteservice
 from openrouteservice import exceptions
 
-from routing.domain.exceptions import RoutingError
-from routing.domain.ports import Geocoder
-from routing.domain.values import Coordinate, GeocodeQuery, normalizar_pais
+from lib.routing.domain.exceptions import RoutingError
+from lib.routing.domain.ports import Geocoder
+from lib.routing.domain.values import Coordinate, GeocodeQuery, normalizar_pais
 
 _ORS_ERRORS = (
     exceptions.ApiError,

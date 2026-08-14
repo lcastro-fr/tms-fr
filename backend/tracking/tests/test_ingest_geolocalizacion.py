@@ -6,9 +6,9 @@ from django.contrib.gis.geos import Point
 from catalog.enums import PAIS_LOCAL, SRID_WGS84
 from catalog.models import Ubicacion
 from conftest import GeocoderFalso
-from routing.domain.exceptions import RoutingError
-from routing.domain.values import Coordinate, GeocodeQuery
-from routing.factory import GeocoderNoConfigurado, build_geocoder
+from lib.routing.domain.exceptions import RoutingError
+from lib.routing.domain.values import Coordinate, GeocodeQuery
+from lib.routing.factory import GeocoderNoConfigurado, build_geocoder
 from tracking.dtos import TicketIngestIn
 from tracking.use_cases import IngestTicketUseCase
 
@@ -99,7 +99,7 @@ def test_los_destinos_sin_pais_viajan_en_la_salida(planta, pais):
 
 
 def test_el_adapter_rechaza_un_pais_que_no_soporta():
-    from routing.adapters import OpenRouteServiceAdapter
+    from lib.routing.adapters import OpenRouteServiceAdapter
 
     adapter = OpenRouteServiceAdapter(api_key="una-key")
     query = GeocodeQuery(direccion="a", localidad="b", provincia="c", pais="Brasil")

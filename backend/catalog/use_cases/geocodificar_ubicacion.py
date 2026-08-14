@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from catalog.dtos import GeocodificarUbicacionIn, GeoJSONPoint, UbicacionGeocodificadaOut
 from catalog.services import PaisService
-from routing.domain import GeocodeQuery, Geocoder, GeocoderNoConfiguradoError, RoutingError
+from lib.routing.domain import GeocodeQuery, Geocoder, GeocoderNoConfiguradoError, RoutingError
 from shared.exceptions import BusinessRuleError
 
 

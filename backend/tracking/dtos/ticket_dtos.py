@@ -2,14 +2,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, computed_field
 
 from catalog.dtos import CodigoUbicacion
 from transportista.dtos import TransportistaIn
+from enum import StrEnum
 
 if TYPE_CHECKING:
     from tracking.models import Ticket
 
+class TipoTransporte(StrEnum):
+    PROPIO = "PROPIO"
+    CONTRATADO = "CONTRATADO"
 
 class RemitoUbicacionIn(BaseModel):
     codigo: str
@@ -33,6 +37,12 @@ class TicketIngestIn(BaseModel):
     fecha_egreso: AwareDatetime | None = None
     transportista: TransportistaIn
     remitos: list[TicketIngestRemitoIn] = Field(default_factory=list)
+    tipo_transp: TipoTransporte | None = None
+
+    @computed_field
+    @property
+    def facturable(self) -> bool:
+        return self.tipo_transp == TipoTransporte.CONTRATADO
 
 
 class RemitoOmitidoOut(BaseModel):
