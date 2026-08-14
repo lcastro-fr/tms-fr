@@ -64,7 +64,7 @@ export function ZonasPanel() {
                 title:
                     error.code === "conflict"
                         ? "La zona está en uso"
-                        : "No se pudo dar de baja",
+                        : "No se pudo eliminar",
                 message: error.message,
             });
         },
@@ -72,13 +72,13 @@ export function ZonasPanel() {
 
     const confirmarBaja = (zona: ZonaOut) =>
         modals.openConfirmModal({
-            title: "Dar de baja la zona",
+            title: "Eliminar la zona",
             children: (
                 <Text size="sm">
                     Esta seguro de eliminar la zona {zona.nombre} ?
                 </Text>
             ),
-            labels: { confirm: "Dar de baja", cancel: "Cancelar" },
+            labels: { confirm: "Eliminar", cancel: "Cancelar" },
             confirmProps: { color: "red" },
             onConfirm: () => eliminar.mutate(zona),
         });

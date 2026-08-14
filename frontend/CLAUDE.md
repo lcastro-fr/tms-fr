@@ -22,12 +22,12 @@ El frontend va detrás del backend, no delante. **Sólo se construyen pantallas 
 endpoints que existen.** Nada de inventar rutas ni mockear respuestas para adelantar UI:
 si falta el endpoint, el trabajo es en `../backend`.
 
-Hoy la API tiene treinta y una operaciones: cuatro de auth, cinco del CRUD de zonas
+Hoy la API tiene treinta y dos operaciones: cuatro de auth, cinco del CRUD de zonas
 (`/api/v1/zonas/`), seis de ubicaciones (`/api/v1/ubicaciones/`: lista con filtros, opciones,
 detalle, alta, geocodificar y PUT), tres de división política (`/api/v1/divisiones/`: provincias,
-departamentos de una provincia y el POST de la unión), cinco de
-órdenes de servicio (`/api/v1/ordenes-servicio/`: opciones, lista con filtros, detalle, PUT y el
-POST del costo), siete de tarifarios (`/api/v1/tarifarios/`: opciones, lista con filtros, detalle,
+departamentos de una provincia y el POST de la unión), seis de
+órdenes de servicio (`/api/v1/ordenes-servicio/`: opciones, lista con filtros, detalle, PUT,
+DELETE y el POST del costo), siete de tarifarios (`/api/v1/tarifarios/`: opciones, lista con filtros, detalle,
 POST, PUT, cierre de vigencia y DELETE) y una de máquina. Zonas, ubicaciones, órdenes de servicio
 y tarifarios son las cuatro pantallas de dominio; división política no tiene pantalla propia, la
 consume el formulario de zona. Tickets sigue teniendo sólo la ingesta desde SAP,
@@ -663,12 +663,18 @@ el cableado, no el render.
   alta, edición y baja con mapa, la capa opcional de puntos y el armado por división política. Ubicaciones tiene **alta y
   edición, sin baja**: la mayoría nacen de la ingesta de SAP, pero un expreso o un puerto no los
   manda nadie, así que hay alta propia con geolocalización asistida. Suma dos filtros (pendientes
-  de validar, sin coordenada) y el punto elegido en el mapa. Órdenes de servicio es **sólo
-  edición**, por lo mismo que antes:
+  de validar, sin coordenada) y el punto elegido en el mapa. Órdenes de servicio tiene **edición y baja,
+  sin alta**, por lo mismo que antes:
   búsqueda por número de ticket o remito, rango de fecha de viaje, tres switches, la columna de
   ticket, el detalle con tickets y remitos, los destinos a facturar, el cálculo del costo —desde
   el modal o desde la fila— y el costo real cargado a mano con sus observaciones.
   Tarifarios es el CRUD completo.
+- **El confirm de la baja de una OS enumera lo que se lleva puesto, y no es palabrería.** El
+  DELETE arrastra los tickets, los remitos y el costo, y desde la tabla eso es invisible: el
+  único rastro es la columna de tickets. Por eso el `openConfirmModal` nombra el ticket cuando
+  es uno solo, cuenta cuando son varios, y aclara que **los tarifarios no se tocan**. Es la
+  regla de no fallar en silencio aplicada a una acción irreversible desde la UI (la fila vuelve
+  sólo por el admin).
 - **La tabla de zonas muestra la superficie en km², y no es decorativa.** Es el número con el que el
   backend desempata: cuando dos zonas cubren los destinos de una OS, se costea contra **la más
   chica**. Sin verlo, quien carga las zonas no puede predecir contra qué zona se tarifa cuando se

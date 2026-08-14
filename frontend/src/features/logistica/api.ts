@@ -95,6 +95,10 @@ export async function actualizarOrdenServicio(
     return data;
 }
 
+export async function eliminarOrdenServicio(id: number): Promise<void> {
+    await http.delete(`/ordenes-servicio/${id}`);
+}
+
 export async function calcularCostoOrdenServicio(
     id: number,
 ): Promise<CostoOrdenServicioOut> {

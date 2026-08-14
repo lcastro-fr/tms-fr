@@ -8,8 +8,10 @@ import type { OrdenServicioOut } from "./api";
 type Acciones = {
     onEditar: (orden: OrdenServicioOut) => void;
     onCalcular: (orden: OrdenServicioOut) => void;
+    onEliminar: (orden: OrdenServicioOut) => void;
     puedeEditar: boolean;
     puedeCalcular: boolean;
+    puedeEliminar: boolean;
     calculandoId: number | null;
     etiqueta: (
         grupo: "tipos_operacion" | "tipos_camion" | "vias",
@@ -20,8 +22,10 @@ type Acciones = {
 export function ordenesServicioColumns({
     onEditar,
     onCalcular,
+    onEliminar,
     puedeEditar,
     puedeCalcular,
+    puedeEliminar,
     calculandoId,
     etiqueta,
 }: Acciones): ColumnDefs<OrdenServicioOut> {
@@ -185,6 +189,16 @@ export function ordenesServicioColumns({
                     >
                         {puedeEditar ? "Editar" : "Ver"}
                     </Button>
+                    {puedeEliminar && (
+                        <Button
+                            size="xs"
+                            variant="subtle"
+                            color="red"
+                            onClick={() => onEliminar(row.original)}
+                        >
+                            Eliminar
+                        </Button>
+                    )}
                 </Group>
             ),
         },

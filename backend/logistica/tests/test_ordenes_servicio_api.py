@@ -6,10 +6,15 @@ from decimal import Decimal
 import pytest
 
 from catalog.enums import TipoCamion
-from logistica.models import CostoOrdenServicio
+from catalog.models import Ubicacion
+from logistica.models import CostoOrdenServicio, OrdenServicio, OrdenServicioDestino
+from logistica.services import OrdenServicioService
 from shared.permisos import PermisoCodigo
+from tracking.models import Remito, RemitoDestino, Ticket
 from tracking.services import RemitoService, TicketService
 from transportista.enums import ModalidadFlete, TipoOperacion, Via
+from transportista.models import TarifaFlete, Tarifario, Transportista
+from transportista.services import TarifarioService
 
 pytestmark = pytest.mark.django_db
 
@@ -659,3 +664,147 @@ def test_costo_por_sesion_llega_al_use_case(client, usuario_con, crear_orden):
     # Pasó la auth y murió en la regla de negocio, que es lo que se quiere verificar.
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "business_rule"
+
+
+@pytest.fixture
+def costo_con_tarifa(transportista, crear_ubicacion):
+    """Un costo que apunta a una tarifa real: es lo que hace verificable que el tarifario sobreviva."""
+
+    def _crear(orden):
+        tarifario = TarifarioService.create_tarifario(
+            transportista_id=transportista.id,
+            vigente_desde=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        tarifa = TarifaFlete.objects.create(
+            tarifario=tarifario,
+            ubicacion=crear_ubicacion("CL900"),
+            modalidad=ModalidadFlete.DIRECTO.value,
+            tipo_camion=TipoCamion.SEMI.value,
+            hombreador=False,
+            precio=Decimal("185000.00"),
+        )
+        costo_os = CostoOrdenServicio.objects.create(
+            orden_servicio=orden,
+            tarifa_flete=tarifa,
+            precio_flete=tarifa.precio,
+            dias=3,
+            precio_dia=None,
+            tipo_operacion=orden.tipo_operacion,
+            hombreador=orden.hombreador,
+            cantidad_destinos=1,
+            fecha_viaje=orden.fecha_viaje,
+        )
+        return tarifario, tarifa, costo_os
+
+    return _crear
+
+
+def test_eliminar_da_de_baja_la_orden(client, usuario_con, crear_orden):
+    orden = crear_orden()
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_ELIMINAR))
+
+    resp = client.delete(detalle(orden.id))
+
+    assert resp.status_code == 204
+    assert OrdenServicio.all_objects.get(pk=orden.id).active is False
+
+
+def test_eliminar_arrastra_tickets_remitos_destinos_y_costo(
+    client, usuario_con, crear_orden, crear_ticket, crear_remito, crear_costo, crear_ubicacion
+):
+    orden = crear_orden()
+    ticket = crear_ticket(orden, "TCK-0099999-A")
+    remito = crear_remito(orden, "0001-00099999")
+    OrdenServicioService.replace_destinos(orden, [crear_ubicacion("CL800").id])
+    costo_os = crear_costo(orden)
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_ELIMINAR))
+
+    assert client.delete(detalle(orden.id)).status_code == 204
+
+    assert Ticket.all_objects.get(pk=ticket.id).active is False
+    assert Remito.all_objects.get(pk=remito.id).active is False
+    assert not RemitoDestino.objects.filter(remito=remito).exists()
+    assert RemitoDestino.all_objects.filter(remito=remito, active=False).exists()
+    assert OrdenServicioDestino.all_objects.filter(
+        orden_servicio=orden, active=False
+    ).count() == 1
+    assert CostoOrdenServicio.all_objects.get(pk=costo_os.id).active is False
+
+
+def test_eliminar_no_toca_el_tarifario_ni_los_datos_maestros(
+    client, usuario_con, crear_orden, costo_con_tarifa, transportista
+):
+    orden = crear_orden()
+    tarifario, tarifa, costo_os = costo_con_tarifa(orden)
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_ELIMINAR))
+
+    assert client.delete(detalle(orden.id)).status_code == 204
+
+    # El costo se va; la tarifa contra la que se costeó, el tarifario y los maestros quedan.
+    assert CostoOrdenServicio.all_objects.get(pk=costo_os.id).active is False
+    assert Tarifario.objects.filter(pk=tarifario.id).exists()
+    assert TarifaFlete.objects.filter(pk=tarifa.id).exists()
+    assert Ubicacion.objects.filter(pk=orden.origen_id).exists()
+    assert Transportista.objects.filter(pk=transportista.id).exists()
+
+
+def test_una_orden_eliminada_sale_de_la_lista(client, usuario_con, crear_orden):
+    orden = crear_orden()
+    otra = crear_orden()
+    client.force_login(
+        usuario_con(PermisoCodigo.ORDENES_SERVICIO_VER, PermisoCodigo.ORDENES_SERVICIO_ELIMINAR)
+    )
+
+    client.delete(detalle(orden.id))
+
+    assert [fila["id"] for fila in client.get(ORDENES).json()] == [otra.id]
+
+
+def test_eliminar_libera_el_numero_de_ticket(
+    client, usuario_con, crear_orden, crear_ticket
+):
+    # La unique es parcial sobre active=True: dar de baja la OS deja re-ingestar el ticket.
+    orden = crear_orden()
+    crear_ticket(orden, "TCK-0011111-A")
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_ELIMINAR))
+    client.delete(detalle(orden.id))
+
+    nueva = crear_orden()
+    ticket = crear_ticket(nueva, "TCK-0011111-A")
+
+    assert ticket.orden_servicio_id == nueva.id
+
+
+def test_eliminar_una_orden_inexistente_da_not_found(client, usuario_con):
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_ELIMINAR))
+
+    resp = client.delete(detalle(9999))
+
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "not_found"
+
+
+def test_eliminar_dos_veces_da_not_found(client, usuario_con, crear_orden):
+    orden = crear_orden()
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_ELIMINAR))
+    client.delete(detalle(orden.id))
+
+    assert client.delete(detalle(orden.id)).status_code == 404
+
+
+def test_editar_no_alcanza_para_eliminar(client, usuario_con, crear_orden):
+    orden = crear_orden()
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_EDITAR))
+
+    resp = client.delete(detalle(orden.id))
+
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "forbidden"
+    assert resp.json()["error"]["detail"]["requiere"] == ["ordenes_servicio.eliminar"]
+    assert OrdenServicio.objects.filter(pk=orden.id).exists()
+
+
+def test_eliminar_sin_sesion_da_unauthorized(client, crear_orden):
+    orden = crear_orden()
+
+    assert client.delete(detalle(orden.id)).status_code == 401

@@ -105,7 +105,7 @@ saberlo antes de buscarlo en `logistica/`.
 
 ## La API hoy
 
-Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **treinta y una
+Montada en `api/v1/` (`core/urls.py`), armada en `core/api.py`. Son **treinta y dos
 operaciones**:
 
 | Método | Path | Auth | Entrada | Salida |
@@ -120,6 +120,7 @@ operaciones**:
 | GET | `/api/v1/ordenes-servicio/` | `ordenes_servicio.ver` | `Query[OrdenesServicioFilters]` | 200 `list[OrdenServicioOut]` |
 | GET | `/api/v1/ordenes-servicio/{id}` | `ordenes_servicio.ver` | — | 200 `OrdenServicioDetalleOut` |
 | PUT | `/api/v1/ordenes-servicio/{id}` | `ordenes_servicio.editar` | `OrdenServicioIn` | 200 `OrdenServicioOut` |
+| DELETE | `/api/v1/ordenes-servicio/{id}` | `ordenes_servicio.eliminar` | — | 204 |
 | GET | `/api/v1/zonas/` | `zonas.ver` | — | 200 `list[ZonaOut]` |
 | POST | `/api/v1/zonas/` | `zonas.crear` | `ZonaIn` | 201 `ZonaOut` |
 | GET | `/api/v1/zonas/{id}` | `zonas.ver` | — | 200 `ZonaOut` |
@@ -156,13 +157,28 @@ puede importar `tracking`**. `add_router` admite repetir prefijo mientras no sea
 (ahí haría falta `url_name_prefix`), y los paths no chocan porque el converter `int:` hace que
 `/opciones` no matchee la ruta de id.
 
-**La OS no tiene alta ni baja por API**, igual que ubicaciones: nace de la ingesta de SAP. El
+**La OS no tiene alta por API**: nace de la ingesta de SAP. El
 PUT toca sólo lo que la ingesta no sabe llenar — `fecha_viaje`, `tipo_operacion`, `tipo_camion`,
 `via`, `hombreador`, `facturable`, `costo_real`, `observaciones` y **`destinos`** — y **no
 recalcula el costo**: el
 `CostoOrdenServicioOut` que devuelve puede haber quedado viejo respecto de lo que se acaba de
 guardar. Recalcular es el POST, explícito, y la SPA bloquea el botón mientras el formulario esté
 sucio.
+
+**Baja sí tiene, y arrastra todo lo que cuelga de la OS.** El DELETE es baja lógica y se lleva
+los tickets, los remitos con los destinos de cada uno, los destinos propios de la OS y el costo
+calculado — o sea, todo lo que sin la OS queda inalcanzable, porque no hay API de lectura de
+tickets ni de remitos. Lo que **no** se toca es el tarifario contra el que se costeó: es dato
+maestro compartido por todas las OS del transportista, y darlo de baja acá borraría precios de
+toda la operación. Lo que se da de baja es el `CostoOrdenServicio`, que es la fila que apunta a
+las tarifas; `TarifaFlete` y `TarifaConceptoAdicional`, `Ubicacion` y `Transportista` quedan
+intactos. `OrdenServicioService.delete_orden_servicio` igual atrapa el `ProtectedError` y lo
+mapea a 409: hoy ningún hijo quedó en `PROTECT`, pero el día que aparezca uno esto es un error
+con explicación y no un 500 crudo.
+
+Efecto buscado: `uq_ticket_numero_planta_active` es parcial sobre `active=True`, así que dar de
+baja la OS **libera el número de ticket** y re-ingestar el mismo desde SAP vuelve a funcionar.
+Es la salida para una OS que la ingesta creó mal.
 
 **`OrdenServicioIn.destinos` es tri-estado y los tres estados importan.** `None` —el campo
 omitido— es "no tocar los destinos"; `[]` es "borralos, y que vuelvan a decidir los remitos"; una
@@ -601,6 +617,13 @@ delete propio: `SoftDeleteCollector` reutiliza el collector de Django y hace
 - **FKs: `PROTECT` cruzando agregados o hacia datos maestros (`catalog`,
   `transportista`), `CASCADE` sólo hacia abajo dentro del mismo agregado.** Con `CASCADE`
   hacia `catalog`, dar de baja un cliente daría de baja toda su historia.
+- **La única excepción es `Ticket.orden_servicio`, que es `CASCADE` cruzando de `tracking` a
+  `logistica`.** Era `PROTECT`, y con eso el DELETE de la OS respondía 409 en el caso normal
+  —toda OS ingestada tiene su ticket—, o sea que la baja no existía para nadie. El ticket no
+  es un agregado aparte: **es el hecho que crea la OS**, y no hay API de lectura de tickets,
+  así que un ticket vivo colgando de una OS dada de baja sería una fila inalcanzable. La
+  dirección de la regla se mantiene para todo lo demás: `Remito` y `RemitoDestino` ya eran
+  `CASCADE`, y los `PROTECT` hacia `catalog` y `transportista` no se tocaron.
 
 ## Fechas
 
@@ -950,7 +973,9 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
   solapamiento, el bloqueo por "en uso" y el filtro de vencidos) y los de la geolocalización de
   la ingesta** (`tracking/tests/`, con un `Geocoder` falso inyectado
   para no tocar la red — es para eso que el use case recibe el geocoder por constructor).
-  `shared/models.py` sigue siendo el código más delicado del repo y sigue sin cobertura propia.
+  `shared/models.py` sigue siendo el código más delicado del repo y sigue sin cobertura propia,
+  aunque la baja de la OS ahora ejercita su cascada multinivel de punta a punta
+  (`test_ordenes_servicio_api.py`: qué se lleva puesto y qué queda intacto).
   Los tests van en un directorio `tests/`, no en un `test_*.py` suelto: el per-file-ignore de
   `S101` es `*/tests/*`.
 - **El management command de la ingesta programada no existe.**
@@ -963,8 +988,9 @@ un naive es 422), `transportista: {cuit, razon_social}` y `remitos[]` con
   planificadas. El paso 3 necesita al menos estado y fechas.
 - **No hay API de lectura propia** de tickets ni de remitos — sólo el admin. Se leen
   **colgados de su OS** (`OrdenServicioDetalleOut`), que alcanza para
-  la pantalla pero no para buscarlos por sí solos. Ubicaciones y órdenes de servicio tienen
-  lista y PUT, pero no alta ni baja (a propósito: nacen de SAP).
+  la pantalla pero no para buscarlos por sí solos. Ni siquiera se dan de baja solos: se van con
+  la baja de su OS. Ubicaciones y órdenes de servicio tienen lista y PUT y **no tienen alta** (a
+  propósito: nacen de SAP); baja tiene la OS, ubicaciones no.
 - **Transportistas y conceptos adicionales son de sólo lectura por API.** Salen embebidos en
   `GET /tarifarios/opciones` para poblar el formulario, pero su alta, edición y baja siguen
   siendo del admin. Cargar un transportista nuevo es, hoy, un paso previo manual al tarifario.

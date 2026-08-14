@@ -1,6 +1,7 @@
 export {
     actualizarOrdenServicio,
     calcularCostoOrdenServicio,
+    eliminarOrdenServicio,
     opcionesOrdenServicioQueryOptions,
     ordenServicioQueryOptions,
     ordenesServicioKeys,

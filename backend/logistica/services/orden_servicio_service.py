@@ -7,18 +7,22 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Q
+from django.db.models.deletion import ProtectedError
 
 from catalog.enums import PAIS_LOCAL
 from catalog.models import Ubicacion
 from catalog.services import UbicacionService
 from logistica.enums import DESTINO_DEFAULT_POR_VIA
 from logistica.models import OrdenServicio, OrdenServicioDestino
-from shared.exceptions import BusinessRuleError, NotFoundError
+from shared.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from transportista.enums import TipoOperacion, Via
 
 
 class OrdenServicioService:
     class OrdenServicioNotFoundError(NotFoundError):
+        pass
+
+    class OrdenServicioEnUsoError(ConflictError):
         pass
 
     class DestinoSinPaisError(BusinessRuleError):
@@ -113,6 +117,20 @@ class OrdenServicioService:
                 detail={"orden_servicio_id": orden_servicio_id},
             )
         return orden_servicio
+
+    @staticmethod
+    def delete_orden_servicio(orden_servicio: OrdenServicio) -> None:
+        try:
+            with transaction.atomic():
+                orden_servicio.delete()
+        except ProtectedError as exc:
+            raise OrdenServicioService.OrdenServicioEnUsoError(
+                "La orden de servicio tiene filas que no se pueden eliminar",
+                detail={
+                    "orden_servicio_id": orden_servicio.id,
+                    "protegidas": len(exc.protected_objects),
+                },
+            ) from exc
 
     @staticmethod
     def update_orden_servicio(

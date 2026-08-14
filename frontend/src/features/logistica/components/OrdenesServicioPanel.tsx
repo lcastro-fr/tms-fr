@@ -8,6 +8,7 @@ import {
 } from "@mantine/core";
 import { DateRangePicker } from "../../../components/DateRangePicker";
 import { useDebouncedValue } from "@mantine/hooks";
+import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
 import {
     useMutation,
@@ -29,6 +30,7 @@ import { formatearPesos } from "../../../lib/money";
 import { usePermisos } from "../../auth";
 import {
     calcularCostoOrdenServicio,
+    eliminarOrdenServicio,
     opcionesOrdenServicioQueryOptions,
     ordenesServicioKeys,
     ordenesServicioQueryOptions,
@@ -42,6 +44,12 @@ const OrdenServicioFormModal = lazy(() =>
         default: m.OrdenServicioFormModal,
     })),
 );
+
+function contarTickets({ tickets }: OrdenServicioOut) {
+    if (tickets.length === 0) return "sus destinos";
+    if (tickets.length === 1) return `su ticket ${tickets[0].numero}`;
+    return `sus ${tickets.length} tickets`;
+}
 
 type Props = {
     filters: OrdenesServicioSeleccion;
@@ -95,6 +103,49 @@ export function OrdenesServicioPanel({
 
     const calculandoId = calcular.isPending ? calcular.variables.id : null;
 
+    const eliminar = useMutation({
+        mutationFn: (orden: OrdenServicioOut) =>
+            eliminarOrdenServicio(orden.id),
+        onSuccess: (_, orden) => {
+            setEditando((abierta) =>
+                abierta?.id === orden.id ? null : abierta,
+            );
+            void queryClient.invalidateQueries({
+                queryKey: ordenesServicioKeys.all,
+            });
+            notifications.show({
+                color: "green",
+                message: `Se dio de baja la OS ${orden.id}`,
+            });
+        },
+        onError: (error: ApiError, orden) => {
+            if (error.code === "not_found") {
+                void queryClient.invalidateQueries({
+                    queryKey: ordenesServicioKeys.all,
+                });
+            }
+            notifications.show({
+                color: "red",
+                title: `No se pudo eliminar la OS ${orden.id}`,
+                message: error.message,
+            });
+        },
+    });
+
+    const confirmarBaja = (orden: OrdenServicioOut) =>
+        modals.openConfirmModal({
+            title: `Eliminar la OS ${orden.id}`,
+            children: (
+                <Text size="sm">
+                    Se elimina también {contarTickets(orden)}, sus remitos y el
+                    costo calculado. ¿Confirmás?
+                </Text>
+            ),
+            labels: { confirm: "Eliminar", cancel: "Cancelar" },
+            confirmProps: { color: "red" },
+            onConfirm: () => eliminar.mutate(orden),
+        });
+
     const etiqueta = useCallback(
         (
             grupo: "tipos_operacion" | "tipos_camion" | "vias",
@@ -111,11 +162,14 @@ export function OrdenesServicioPanel({
             ordenesServicioColumns({
                 onEditar: setEditando,
                 onCalcular: calcular.mutate,
+                onEliminar: confirmarBaja,
                 puedeEditar: can("ordenes_servicio.editar"),
                 puedeCalcular: can("ordenes_servicio.calcular_costo"),
+                puedeEliminar: can("ordenes_servicio.eliminar"),
                 calculandoId,
                 etiqueta,
             }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         [can, calcular.mutate, calculandoId, etiqueta],
     );
 

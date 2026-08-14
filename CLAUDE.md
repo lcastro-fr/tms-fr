@@ -44,6 +44,9 @@ Cuatro pasos, en orden. No adelantarse a los siguientes.
    mano lo que la ingesta no sabe llenar (`fecha_viaje`, `tipo_operacion`, `tipo_camion`, `via`,
    `hombreador`, `facturable`, `destinos`) y disparar el costeo, pero **la OS sigue naciendo del
    ticket**: no hay alta, ni `numero`, ni estado, ni fechas planificadas.
+   Lo que sí hay es **baja**: una OS que la ingesta creó mal se da de baja con todo lo que le
+   cuelga —tickets, remitos y costo— y eso libera el número de ticket para volver a ingestarlo.
+   Los tarifarios no se tocan: son dato maestro de todo el transportista.
 4. **Ruteo.** Optimización logística con OpenRouteService (`lat`/`lng` ya están en
    `Ubicacion`).
 

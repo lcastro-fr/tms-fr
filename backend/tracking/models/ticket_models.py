@@ -13,7 +13,7 @@ class Ticket(BaseModel):
     numero = models.CharField(max_length=20)
     planta = models.ForeignKey(Ubicacion, on_delete=models.PROTECT, related_name="tickets")
     orden_servicio = models.ForeignKey(
-        OrdenServicio, on_delete=models.PROTECT, related_name="tickets"
+        OrdenServicio, on_delete=models.CASCADE, related_name="tickets"
     )
     fecha_ingreso = models.DateTimeField()
     fecha_egreso = models.DateTimeField(null=True, blank=True)

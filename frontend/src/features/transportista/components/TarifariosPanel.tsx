@@ -1,7 +1,11 @@
 import { Button, Group, Loader, Select, Switch, Text } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+    useMutation,
+    useQueryClient,
+    useSuspenseQuery,
+} from "@tanstack/react-query";
 import { Suspense, lazy, useMemo, useState } from "react";
 
 import type { ApiError } from "../../../api/errors";
@@ -18,10 +22,14 @@ import { tarifariosColumns } from "../tarifarios-columns";
 import type { Modo } from "./TarifarioFormModal";
 
 const TarifarioFormModal = lazy(() =>
-    import("./TarifarioFormModal").then((m) => ({ default: m.TarifarioFormModal })),
+    import("./TarifarioFormModal").then((m) => ({
+        default: m.TarifarioFormModal,
+    })),
 );
 const CerrarVigenciaModal = lazy(() =>
-    import("./CerrarVigenciaModal").then((m) => ({ default: m.CerrarVigenciaModal })),
+    import("./CerrarVigenciaModal").then((m) => ({
+        default: m.CerrarVigenciaModal,
+    })),
 );
 
 type Props = {
@@ -33,19 +41,31 @@ type Props = {
 
 type Editando = { tarifarioId: number | null; modo: Modo };
 
-export function TarifariosPanel({ filters, seleccion, cargando, onFiltersChange }: Props) {
+export function TarifariosPanel({
+    filters,
+    seleccion,
+    cargando,
+    onFiltersChange,
+}: Props) {
     const { can } = usePermisos();
     const queryClient = useQueryClient();
-    const { data: tarifarios } = useSuspenseQuery(tarifariosQueryOptions(filters));
-    const { data: opciones } = useSuspenseQuery(tarifarioOpcionesQueryOptions());
+    const { data: tarifarios } = useSuspenseQuery(
+        tarifariosQueryOptions(filters),
+    );
+    const { data: opciones } = useSuspenseQuery(
+        tarifarioOpcionesQueryOptions(),
+    );
 
     const [editando, setEditando] = useState<Editando | null>(null);
     const [cerrando, setCerrando] = useState<TarifarioOut | null>(null);
 
     const eliminar = useMutation({
-        mutationFn: (tarifario: TarifarioOut) => eliminarTarifario(tarifario.id),
+        mutationFn: (tarifario: TarifarioOut) =>
+            eliminarTarifario(tarifario.id),
         onSuccess: (_, tarifario) => {
-            void queryClient.invalidateQueries({ queryKey: tarifariosKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: tarifariosKeys.all,
+            });
             notifications.show({
                 color: "green",
                 message: `Se dio de baja el tarifario de ${tarifario.transportista_razon_social}`,
@@ -53,14 +73,16 @@ export function TarifariosPanel({ filters, seleccion, cargando, onFiltersChange 
         },
         onError: (error: ApiError) => {
             if (error.code === "not_found") {
-                void queryClient.invalidateQueries({ queryKey: tarifariosKeys.all });
+                void queryClient.invalidateQueries({
+                    queryKey: tarifariosKeys.all,
+                });
             }
             notifications.show({
                 color: "red",
                 title:
                     error.code === "conflict"
                         ? "El tarifario está en uso"
-                        : "No se pudo dar de baja",
+                        : "No se pudo eliminar",
                 message: error.message,
             });
         },
@@ -68,14 +90,15 @@ export function TarifariosPanel({ filters, seleccion, cargando, onFiltersChange 
 
     const confirmarBaja = (tarifario: TarifarioOut) =>
         modals.openConfirmModal({
-            title: "Dar de baja el tarifario",
+            title: "Eliminar el tarifario",
             children: (
                 <Text size="sm">
-                    Se dan de baja también sus {tarifario.cantidad_fletes} tarifas de flete y sus{" "}
-                    {tarifario.cantidad_conceptos} conceptos. ¿Confirmás?
+                    Se elimina también sus {tarifario.cantidad_fletes} tarifas
+                    de flete y sus {tarifario.cantidad_conceptos} conceptos.
+                    ¿Confirmás?
                 </Text>
             ),
-            labels: { confirm: "Dar de baja", cancel: "Cancelar" },
+            labels: { confirm: "Eliminar", cancel: "Cancelar" },
             confirmProps: { color: "red" },
             onConfirm: () => eliminar.mutate(tarifario),
         });
@@ -86,7 +109,10 @@ export function TarifariosPanel({ filters, seleccion, cargando, onFiltersChange 
                 onAbrir: (tarifario) =>
                     setEditando({ tarifarioId: tarifario.id, modo: "edicion" }),
                 onDuplicar: (tarifario) =>
-                    setEditando({ tarifarioId: tarifario.id, modo: "duplicado" }),
+                    setEditando({
+                        tarifarioId: tarifario.id,
+                        modo: "duplicado",
+                    }),
                 onCerrar: setCerrando,
                 onEliminar: confirmarBaja,
                 puedeEditar: can("tarifarios.editar"),
@@ -113,11 +139,15 @@ export function TarifariosPanel({ filters, seleccion, cargando, onFiltersChange 
                         clearable
                         data={transportistas}
                         value={
-                            seleccion.transportista_id ? String(seleccion.transportista_id) : null
+                            seleccion.transportista_id
+                                ? String(seleccion.transportista_id)
+                                : null
                         }
                         onChange={(valor) =>
                             onFiltersChange({
-                                transportista_id: valor ? Number(valor) : undefined,
+                                transportista_id: valor
+                                    ? Number(valor)
+                                    : undefined,
                             })
                         }
                     />
@@ -128,14 +158,20 @@ export function TarifariosPanel({ filters, seleccion, cargando, onFiltersChange 
                         checked={seleccion.incluir_historicos === true}
                         onChange={(event) =>
                             onFiltersChange({
-                                incluir_historicos: event.currentTarget.checked ? true : undefined,
+                                incluir_historicos: event.currentTarget.checked
+                                    ? true
+                                    : undefined,
                             })
                         }
                     />
                     {cargando && <Loader size="xs" />}
                 </Group>
                 <Can permiso="tarifarios.crear">
-                    <Button onClick={() => setEditando({ tarifarioId: null, modo: "alta" })}>
+                    <Button
+                        onClick={() =>
+                            setEditando({ tarifarioId: null, modo: "alta" })
+                        }
+                    >
                         Nuevo tarifario
                     </Button>
                 </Can>

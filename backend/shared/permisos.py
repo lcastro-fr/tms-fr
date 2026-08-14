@@ -15,6 +15,7 @@ class PermisoCodigo(StrEnum):
     ORDENES_SERVICIO_VER = "ordenes_servicio.ver"
     ORDENES_SERVICIO_EDITAR = "ordenes_servicio.editar"
     ORDENES_SERVICIO_CALCULAR_COSTO = "ordenes_servicio.calcular_costo"
+    ORDENES_SERVICIO_ELIMINAR = "ordenes_servicio.eliminar"
     TARIFARIOS_VER = "tarifarios.ver"
     TARIFARIOS_CREAR = "tarifarios.crear"
     TARIFARIOS_EDITAR = "tarifarios.editar"
@@ -34,6 +35,7 @@ PERMISO_DESCRIPCIONES: dict[PermisoCodigo, str] = {
     PermisoCodigo.ORDENES_SERVICIO_VER: "Ver órdenes de servicio",
     PermisoCodigo.ORDENES_SERVICIO_EDITAR: "Editar órdenes de servicio",
     PermisoCodigo.ORDENES_SERVICIO_CALCULAR_COSTO: "Calcular el costo de una orden de servicio",
+    PermisoCodigo.ORDENES_SERVICIO_ELIMINAR: "Eliminar órdenes de servicio",
     PermisoCodigo.TARIFARIOS_VER: "Ver tarifarios",
     PermisoCodigo.TARIFARIOS_CREAR: "Crear tarifarios",
     PermisoCodigo.TARIFARIOS_EDITAR: "Editar tarifarios y cerrar su vigencia",

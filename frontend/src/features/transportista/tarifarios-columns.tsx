@@ -37,7 +37,8 @@ export function tarifariosColumns({
             accessorKey: "vigente_hasta",
             header: "Vigente hasta",
             enableGlobalFilter: false,
-            cell: ({ row }) => formatearFecha(row.original.vigente_hasta, "Sin cierre"),
+            cell: ({ row }) =>
+                formatearFecha(row.original.vigente_hasta, "Sin cierre"),
         },
         {
             accessorKey: "cantidad_fletes",
@@ -77,7 +78,11 @@ export function tarifariosColumns({
                 const editable = puedeEditar && !tarifario.en_uso;
                 return (
                     <Group gap="xs" justify="flex-end" wrap="nowrap">
-                        <Button size="xs" variant="subtle" onClick={() => onAbrir(tarifario)}>
+                        <Button
+                            size="xs"
+                            variant="subtle"
+                            onClick={() => onAbrir(tarifario)}
+                        >
                             {editable ? "Editar" : "Ver"}
                         </Button>
                         {puedeCrear && (
@@ -90,7 +95,11 @@ export function tarifariosColumns({
                             </Button>
                         )}
                         {puedeEditar && tarifario.vigente_hasta === null && (
-                            <Button size="xs" variant="subtle" onClick={() => onCerrar(tarifario)}>
+                            <Button
+                                size="xs"
+                                variant="subtle"
+                                onClick={() => onCerrar(tarifario)}
+                            >
                                 Cerrar vigencia
                             </Button>
                         )}
@@ -101,7 +110,7 @@ export function tarifariosColumns({
                                 color="red"
                                 onClick={() => onEliminar(tarifario)}
                             >
-                                Dar de baja
+                                Eliminar
                             </Button>
                         )}
                     </Group>

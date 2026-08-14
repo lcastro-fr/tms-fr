@@ -13,6 +13,7 @@ from logistica.dtos import (
 )
 from logistica.use_cases import (
     ActualizarOrdenServicioUseCase,
+    EliminarOrdenServicioUseCase,
     ListarOrdenesServicioUseCase,
     ObtenerOrdenServicioUseCase,
     OpcionesOrdenServicioUseCase,
@@ -72,3 +73,19 @@ def actualizar_orden_servicio(
     request: HttpRequest, orden_servicio_id: int, payload: OrdenServicioIn
 ):
     return 200, ActualizarOrdenServicioUseCase.execute(orden_servicio_id, payload)
+
+
+@ordenes_servicio_router.delete(
+    "/{int:orden_servicio_id}",
+    response={204: None, **ERRORS},
+    auth=SessionAuth(PermisoCodigo.ORDENES_SERVICIO_ELIMINAR),
+    summary="Da de baja lógica una orden de servicio",
+    description=(
+        "La baja arrastra lo que cuelga de la orden: sus tickets, sus remitos con los destinos "
+        "de cada uno, sus destinos propios y su costo calculado."
+    ),
+    operation_id="eliminarOrdenServicio",
+)
+def eliminar_orden_servicio(request: HttpRequest, orden_servicio_id: int):
+    EliminarOrdenServicioUseCase.execute(orden_servicio_id)
+    return 204, None

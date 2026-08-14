@@ -158,7 +158,11 @@ export interface paths {
          */
         put: operations["actualizarOrdenServicio"];
         post?: never;
-        delete?: never;
+        /**
+         * Da de baja lógica una orden de servicio
+         * @description La baja arrastra lo que cuelga de la orden: sus tickets, sus remitos con los destinos de cada uno, sus destinos propios y su costo calculado. El tarifario contra el que se costeó no se toca: es dato maestro compartido por todas las órdenes del transportista.
+         */
+        delete: operations["eliminarOrdenServicio"];
         options?: never;
         head?: never;
         patch?: never;
@@ -433,7 +437,7 @@ export interface components {
          * PermisoCodigo
          * @enum {string}
          */
-        PermisoCodigo: "zonas.ver" | "zonas.crear" | "zonas.editar" | "zonas.eliminar" | "ubicaciones.ver" | "ubicaciones.crear" | "ubicaciones.editar" | "ordenes_servicio.ver" | "ordenes_servicio.editar" | "ordenes_servicio.calcular_costo" | "tarifarios.ver" | "tarifarios.crear" | "tarifarios.editar" | "tarifarios.eliminar";
+        PermisoCodigo: "zonas.ver" | "zonas.crear" | "zonas.editar" | "zonas.eliminar" | "ubicaciones.ver" | "ubicaciones.crear" | "ubicaciones.editar" | "ordenes_servicio.ver" | "ordenes_servicio.editar" | "ordenes_servicio.calcular_costo" | "ordenes_servicio.eliminar" | "tarifarios.ver" | "tarifarios.crear" | "tarifarios.editar" | "tarifarios.eliminar";
         /** SesionOut */
         SesionOut: {
             /** Id */
@@ -531,6 +535,7 @@ export interface components {
             transportista: components["schemas"]["TransportistaIn"];
             /** Remitos */
             remitos?: components["schemas"]["TicketIngestRemitoIn"][];
+            tipo_transp?: components["schemas"]["TipoTransporte"] | null;
         };
         /** TicketIngestRemitoIn */
         TicketIngestRemitoIn: {
@@ -541,6 +546,11 @@ export interface components {
             /** Destinos */
             destinos: components["schemas"]["RemitoUbicacionIn"][];
         };
+        /**
+         * TipoTransporte
+         * @enum {string}
+         */
+        TipoTransporte: "PROPIO" | "CONTRATADO";
         /** TransportistaIn */
         TransportistaIn: {
             /** Cuit */
@@ -2052,6 +2062,89 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["OrdenServicioOut"];
                 };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    eliminarOrdenServicio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orden_servicio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {
