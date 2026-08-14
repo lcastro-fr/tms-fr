@@ -34,6 +34,8 @@ class OrdenServicio(BaseModel):
     )
     hombreador = models.BooleanField(default=False)
     facturable = models.BooleanField(default=False)
+    costo_real = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    observaciones = models.TextField(blank=True, default="")
 
     class Meta(BaseModel.Meta):
         db_table = "orden_servicio"

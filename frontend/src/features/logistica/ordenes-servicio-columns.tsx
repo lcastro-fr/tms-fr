@@ -7,7 +7,10 @@ import type { OrdenServicioOut } from "./api";
 
 type Acciones = {
     onEditar: (orden: OrdenServicioOut) => void;
+    onCalcular: (orden: OrdenServicioOut) => void;
     puedeEditar: boolean;
+    puedeCalcular: boolean;
+    calculandoId: number | null;
     etiqueta: (
         grupo: "tipos_operacion" | "tipos_camion" | "vias",
         value: string | null,
@@ -16,7 +19,10 @@ type Acciones = {
 
 export function ordenesServicioColumns({
     onEditar,
+    onCalcular,
     puedeEditar,
+    puedeCalcular,
+    calculandoId,
     etiqueta,
 }: Acciones): ColumnDefs<OrdenServicioOut> {
     return [
@@ -122,11 +128,9 @@ export function ordenesServicioColumns({
         },
         {
             id: "costo",
-            header: "Costo",
+            header: "Costo teórico",
             accessorFn: (orden) =>
                 orden.costo ? Number(orden.costo.total) : -1,
-            // El accessor es el número crudo con -1 de centinela: buscar "1" traería todas las
-            // OS sin costo, y "185.000" ninguna.
             enableGlobalFilter: false,
             cell: ({ row }) =>
                 row.original.costo ? (
@@ -140,11 +144,38 @@ export function ordenesServicioColumns({
                 ),
         },
         {
+            id: "costo_real",
+            header: "Costo real",
+            accessorFn: (orden) =>
+                orden.costo_real ? Number(orden.costo_real) : -1,
+            enableGlobalFilter: false,
+            cell: ({ row }) =>
+                row.original.costo_real ? (
+                    <Text size="sm" fw={500}>
+                        {formatearPesos(row.original.costo_real)}
+                    </Text>
+                ) : (
+                    <Text c="dimmed" size="sm">
+                        sin cargar
+                    </Text>
+                ),
+        },
+        {
             id: "acciones",
             header: "",
             enableSorting: false,
             cell: ({ row }) => (
                 <Group gap="xs" justify="flex-end" wrap="nowrap">
+                    {puedeCalcular && (
+                        <Button
+                            size="xs"
+                            variant="subtle"
+                            loading={calculandoId === row.original.id}
+                            onClick={() => onCalcular(row.original)}
+                        >
+                            {row.original.costo ? "Recalcular" : "Calcular"}
+                        </Button>
+                    )}
                     <Button
                         size="xs"
                         variant="subtle"

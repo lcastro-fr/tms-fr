@@ -18,6 +18,8 @@ export type Valores = {
     modalidad: OrdenServicioIn["modalidad"];
     hombreador: boolean;
     facturable: boolean;
+    costo_real: string | number;
+    observaciones: string;
     destinos: FilaDestino[];
 };
 
@@ -33,7 +35,9 @@ export function filaDestinoVacia(): FilaDestino {
     return { key: nuevaKey(), ubicacion_id: null };
 }
 
-export function aFilasDestino(destinos: OrdenServicioDestinoOut[]): FilaDestino[] {
+export function aFilasDestino(
+    destinos: OrdenServicioDestinoOut[],
+): FilaDestino[] {
     return destinos.map((destino) => ({
         key: nuevaKey(),
         ubicacion_id: String(destino.ubicacion_id),
@@ -49,6 +53,8 @@ export function valoresIniciales(detalle: OrdenServicioDetalleOut): Valores {
         modalidad: (detalle.modalidad as Valores["modalidad"]) ?? null,
         hombreador: detalle.hombreador,
         facturable: detalle.facturable,
+        costo_real: detalle.costo_real ?? "",
+        observaciones: detalle.observaciones,
         destinos: aFilasDestino(detalle.destinos),
     };
 }
@@ -62,6 +68,9 @@ export function aPayload(valores: Valores): OrdenServicioIn {
         modalidad: valores.modalidad,
         hombreador: valores.hombreador,
         facturable: valores.facturable,
+        costo_real:
+            valores.costo_real === "" ? null : String(valores.costo_real),
+        observaciones: valores.observaciones.trim(),
         // Siempre se mandan: [] borra, omitirlos sería "no tocar".
         destinos: valores.destinos
             .filter((fila) => fila.ubicacion_id !== null)

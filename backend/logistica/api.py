@@ -63,7 +63,8 @@ def obtener_orden_servicio(request: HttpRequest, orden_servicio_id: int):
     summary="Corrige los datos de planificación de una orden de servicio",
     description=(
         "No recalcula el costo: el costo vigente que devuelve puede haber quedado viejo "
-        "respecto de los datos nuevos."
+        "respecto de los datos nuevos. Es también el único lugar donde se cargan el costo "
+        "real y sus observaciones, que el cálculo del costo no pisa."
     ),
     operation_id="actualizarOrdenServicio",
 )

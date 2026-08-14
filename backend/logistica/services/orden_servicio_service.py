@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -123,6 +124,8 @@ class OrdenServicioService:
         modalidad: str | None,
         hombreador: bool,
         facturable: bool,
+        costo_real: Decimal | None,
+        observaciones: str,
     ) -> OrdenServicio:
         orden_servicio.fecha_viaje = fecha_viaje
         orden_servicio.tipo_operacion = tipo_operacion
@@ -131,6 +134,8 @@ class OrdenServicioService:
         orden_servicio.modalidad = modalidad
         orden_servicio.hombreador = hombreador
         orden_servicio.facturable = facturable
+        orden_servicio.costo_real = costo_real
+        orden_servicio.observaciones = observaciones
         with transaction.atomic():
             orden_servicio.save(
                 update_fields=[
@@ -141,6 +146,8 @@ class OrdenServicioService:
                     "modalidad",
                     "hombreador",
                     "facturable",
+                    "costo_real",
+                    "observaciones",
                     "updated_at",
                 ]
             )

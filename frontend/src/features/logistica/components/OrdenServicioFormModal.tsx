@@ -6,11 +6,13 @@ import {
     Fieldset,
     Group,
     Modal,
+    NumberInput,
     Select,
     SimpleGrid,
     Stack,
     Text,
     TextInput,
+    Textarea,
 } from "@mantine/core";
 import { DateTimePicker } from "@mantine/dates";
 import { useForm } from "@mantine/form";
@@ -34,11 +36,7 @@ import {
     ordenServicioQueryOptions,
     ordenesServicioKeys,
 } from "../api";
-import type {
-    CostoOrdenServicioOut,
-    OrdenServicioOut,
-    RemitoOut,
-} from "../api";
+import type { OrdenServicioOut, RemitoOut } from "../api";
 import { FilasDestinoOrden } from "./FilasDestinoOrden";
 import { TicketsDeOrden } from "./TicketsDeOrden";
 import type { Valores } from "./valores-orden-servicio";
@@ -65,9 +63,6 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
     const { data: detalle } = useSuspenseQuery(
         ordenServicioQueryOptions(orden.id),
     );
-    const [costo, setCosto] = useState<CostoOrdenServicioOut | null>(
-        detalle.costo ?? null,
-    );
     const [editandoUbicacion, setEditandoUbicacion] = useState<number | null>(
         null,
     );
@@ -79,7 +74,9 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
     const guardar = useMutation({
         mutationFn: (valores: Valores) =>
             actualizarOrdenServicio(orden.id, aPayload(valores)),
-        onSuccess: (guardada) => {
+        onSuccess: (guardada, valores) => {
+            form.setInitialValues(valores);
+            form.resetDirty(valores);
             void queryClient.invalidateQueries({
                 queryKey: ordenesServicioKeys.all,
             });
@@ -87,7 +84,6 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
                 color: "green",
                 message: `Se guardó la OS ${guardada.id}`,
             });
-            onClose();
         },
         onError: (error: ApiError) => {
             const campos = fieldErrors(error);
@@ -112,7 +108,6 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
     const calcular = useMutation({
         mutationFn: () => calcularCostoOrdenServicio(orden.id),
         onSuccess: (calculado) => {
-            setCosto(calculado);
             void queryClient.invalidateQueries({
                 queryKey: ordenesServicioKeys.all,
             });
@@ -144,7 +139,8 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
     // un número que no se corresponde con lo que hay en pantalla.
     const sucio = form.isDirty();
     const esCamara = form.values.tipo_operacion === "camara";
-    const costoViejo = detalle.costo_desactualizado && costo === detalle.costo;
+    const costo = detalle.costo ?? null;
+    const costoViejo = detalle.costo_desactualizado;
 
     return (
         <Modal
@@ -347,6 +343,31 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
                                 </Alert>
                             )}
 
+                            <SimpleGrid cols={{ base: 1, sm: 2 }}>
+                                <NumberInput
+                                    label="Costo real"
+                                    placeholder="Sin cargar"
+                                    decimalScale={2}
+                                    fixedDecimalScale
+                                    hideControls
+                                    min={0}
+                                    thousandSeparator="."
+                                    decimalSeparator=","
+                                    prefix="$ "
+                                    disabled={!puedeEditar}
+                                    {...form.getInputProps("costo_real")}
+                                />
+                                <Textarea
+                                    label="Observaciones"
+                                    placeholder="Por qué el costo real difiere del calculado"
+                                    autosize
+                                    minRows={2}
+                                    maxLength={2000}
+                                    disabled={!puedeEditar}
+                                    {...form.getInputProps("observaciones")}
+                                />
+                            </SimpleGrid>
+
                             <Group justify="space-between">
                                 <Text c="dimmed" size="xs">
                                     {costo &&
@@ -377,7 +398,7 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
 
                     <Group justify="flex-end">
                         <Button variant="default" onClick={onClose}>
-                            {puedeEditar ? "Cancelar" : "Cerrar"}
+                            {puedeEditar && sucio ? "Cancelar" : "Cerrar"}
                         </Button>
                         {puedeEditar && (
                             <Button

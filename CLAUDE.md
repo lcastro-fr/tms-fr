@@ -32,6 +32,11 @@ Cuatro pasos, en orden. No adelantarse a los siguientes.
    Y como esos destinos SAP no los manda, `/ubicaciones` tiene **alta propia** con
    geolocalización asistida: el usuario completa la dirección, pide la coordenada al geocoder o la
    marca en el mapa, y guarda.
+   **Mientras el cálculo se valida contra la realidad, el costo teórico convive con uno real.**
+   La OS tiene `costo_real` y `observaciones`, que carga logística a mano cuando lo facturado no
+   coincide con lo calculado; la tabla de `/ordenes-servicio` muestra las dos cifras en columnas
+   separadas, porque lo que hay que poder ver es el desvío. Van en la OS y no en el costo
+   calculado justamente para que un recálculo no se los lleve puestos.
 2. **Eventos.** Registrar los eventos de cada ticket y calcular cuánto duró cada uno.
 3. **Orden de servicio.** Planificar la OS *antes* de que llegue el camión. Hoy
    `IngestTicketUseCase` crea una OS nueva por ticket; en este paso el ticket tiene que

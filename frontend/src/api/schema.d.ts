@@ -154,7 +154,7 @@ export interface paths {
         get: operations["obtenerOrdenServicio"];
         /**
          * Corrige los datos de planificación de una orden de servicio
-         * @description No recalcula el costo: el costo vigente que devuelve puede haber quedado viejo respecto de los datos nuevos.
+         * @description No recalcula el costo: el costo vigente que devuelve puede haber quedado viejo respecto de los datos nuevos. Es también el único lugar donde se cargan el costo real y sus observaciones, que el cálculo del costo no pisa.
          */
         put: operations["actualizarOrdenServicio"];
         post?: never;
@@ -669,6 +669,10 @@ export interface components {
             hombreador: boolean;
             /** Facturable */
             facturable: boolean;
+            /** Costo Real */
+            costo_real: string | null;
+            /** Observaciones */
+            observaciones: string;
             /** Active */
             active: boolean;
             costo?: components["schemas"]["CostoOrdenServicioOut"] | null;
@@ -755,6 +759,10 @@ export interface components {
             hombreador: boolean;
             /** Facturable */
             facturable: boolean;
+            /** Costo Real */
+            costo_real: string | null;
+            /** Observaciones */
+            observaciones: string;
             /** Active */
             active: boolean;
             costo?: components["schemas"]["CostoOrdenServicioOut"] | null;
@@ -836,6 +844,13 @@ export interface components {
              * @default false
              */
             facturable: boolean;
+            /** Costo Real */
+            costo_real?: number | string | null;
+            /**
+             * Observaciones
+             * @default
+             */
+            observaciones: string;
             /** Destinos */
             destinos?: components["schemas"]["OrdenServicioDestinoIn"][] | null;
         };

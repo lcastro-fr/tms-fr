@@ -551,7 +551,8 @@ Los archivos de test cubren exactamente lo que es silencioso cuando se rompe:
   offset del backend. Es el que más paga después de `geojson`: un ISO naive es 422 y un offset
   tomado de la zona del browser guarda la fecha corrida sin que nadie se entere.
 - `src/lib/money.test.ts` — el formateo del `Decimal`-string, incluido el caso vacío que
-  `Number("")` convierte en un `$ 0,00` que parece un precio real.
+  `Number("")` convierte en un `$ 0,00` que parece un precio real; y el desvío con signo entre
+  dos importes, con el redondeo a centavos que evita mostrar la cola binaria de la resta.
 - `src/lib/numero.test.ts` — la superficie de una zona, con la misma trampa del `Number("")` y el
   umbral de los 100 km², abajo del cual redondear a entero mostraría `0`.
 - `src/api/errors.test.ts` — el mapeo de `loc` a campo de formulario, sobre todo el caso
@@ -603,7 +604,8 @@ el cableado, no el render.
   de validar, sin coordenada) y el punto elegido en el mapa. Órdenes de servicio es **sólo
   edición**, por lo mismo que antes:
   búsqueda por número de ticket o remito, rango de fecha de viaje, tres switches, la columna de
-  ticket, el detalle con tickets y remitos, los destinos a facturar y el cálculo del costo.
+  ticket, el detalle con tickets y remitos, los destinos a facturar, el cálculo del costo —desde
+  el modal o desde la fila— y el costo real cargado a mano con sus observaciones.
   Tarifarios es el CRUD completo.
 - **La tabla de zonas muestra la superficie en km², y no es decorativa.** Es el número con el que el
   backend desempata: cuando dos zonas cubren los destinos de una OS, se costea contra **la más
@@ -749,6 +751,44 @@ el cableado, no el render.
   guardar mostraría un número que no se corresponde con lo que el usuario tiene en pantalla. Es
   la regla de "nada de fallas silenciosas" aplicada a un botón. El aviso dice por qué está
   bloqueado, en vez de dejarlo gris y mudo.
+- **Guardar la OS ya no cierra el modal**, y eso es lo que hace usable el botón de arriba. El
+  ciclo real es *corregir → costear*, y cerrando al guardar había que reabrir la OS para apretar
+  Calcular. Ahora `guardar.onSuccess` hace `setInitialValues` + `resetDirty` con lo que se
+  mandó: el formulario queda limpio, `sucio` pasa a `false` y el botón se desbloquea en el
+  lugar. El `onClose()` del camino `not_found` **sí** se conserva: ahí la OS ya no existe.
+- **Eso obligó a sacar el estado local del costo, y era un bug esperando.** El modal tenía un
+  `useState` con el costo y comparaba `costo === detalle.costo` **por identidad de objeto** para
+  decidir si mostrar el aviso de "quedó viejo". Eso sólo funcionaba porque el detalle nunca se
+  refetcheaba con el modal abierto; al no cerrarlo al guardar, la invalidación por prefijo lo
+  refetchea y la identidad cambia sola, así que el aviso no habría vuelto a aparecer nunca. Hoy
+  el costo sale de `detalle.costo` y `costoViejo` es directamente `detalle.costo_desactualizado`,
+  que es lo que el backend ya calcula.
+- **El costo real y sus observaciones van en el fieldset de Costo, no en Generales.** Son la
+  contrapartida del número calculado y se leen contra él: el `description` del campo muestra el
+  **desvío** (`+$ 5.000,00 contra el calculado`) cuando existen los dos. Sin eso la resta la
+  tiene que hacer el usuario a ojo, que es justo lo que el campo viene a evitar.
+- **La resta vive en `lib/money.ts` y no en el componente.** `diferenciaPesos` es la única forma
+  de hacer aritmética de pesos en el frontend, y está ahí porque `Number()` sólo se permite en
+  ese archivo y sólo para mostrar. Redondea a centavos antes de comparar contra cero: la resta
+  en float deja colas de `1e-10` que se verían como un desvío inexistente. Está cubierto en
+  `money.test.ts`.
+- **La tabla tiene dos columnas de costo, no una.** `costo` es el calculado y `costo_real` el
+  cargado a mano; el punto de la pantalla es **ver el desvío**, y una sola columna que muestre
+  el real cuando existe esconde exactamente lo que hay que mirar. `costo_real` copia el
+  `accessorFn` numérico con `-1` de centinela y el `enableGlobalFilter: false` de `costo`, por
+  las mismas dos razones.
+- **Calcular el costo también se puede desde la fila.** Es el atajo para la OS que ya está bien
+  cargada y sólo hay que costear: no hay que abrir el modal. La mutación vive en
+  `OrdenesServicioPanel` (el molde de `TarifariosPanel`) y la fila en curso sale de
+  `calcular.isPending ? calcular.variables.id : null`, sin un `useState` aparte.
+- **Ese error va a una notificación `autoClose: false`, y la excepción está justificada.** La
+  regla de esta pantalla es que los `business_rule` del costeo van a un `<Alert>` y no a un
+  toast, porque su mensaje es lo único que explica la falla; desde la tabla no hay un `<Alert>`
+  donde quedarse, así que la salida es un toast **que no se cierra solo**, con el número de OS
+  en el título. Un toast con autoClose sí sería la falla silenciosa que la regla evita.
+- **El botón de la fila no se deshabilita por `facturable` ni por falta de `fecha_viaje`.** El
+  backend responde 422 con el motivo exacto, y esconder la acción dejaría al usuario sin la
+  explicación de por qué esa OS no se puede costear.
 - **El costeo es el endpoint más rico en `business_rule` del repo** y sus mensajes son lo único
   que le explica al usuario por qué falló: OS no facturable, sin `fecha_viaje`, sin tarifario
   vigente, tarifa no resuelta (`detail.motivo` ∈ `sin_coordenadas`/`sin_zona_comun`/`sin_tarifa`),

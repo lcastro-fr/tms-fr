@@ -158,7 +158,8 @@ puede importar `tracking`**. `add_router` admite repetir prefijo mientras no sea
 
 **La OS no tiene alta ni baja por API**, igual que ubicaciones: nace de la ingesta de SAP. El
 PUT toca sólo lo que la ingesta no sabe llenar — `fecha_viaje`, `tipo_operacion`, `tipo_camion`,
-`via`, `hombreador`, `facturable` y **`destinos`** — y **no recalcula el costo**: el
+`via`, `hombreador`, `facturable`, `costo_real`, `observaciones` y **`destinos`** — y **no
+recalcula el costo**: el
 `CostoOrdenServicioOut` que devuelve puede haber quedado viejo respecto de lo que se acaba de
 guardar. Recalcular es el POST, explícito, y la SPA bloquea el botón mientras el formulario esté
 sucio.
@@ -176,6 +177,35 @@ sería 500. Lo que agrega es un **early return cuando los ids que llegan ya son 
 PUT es de objeto entero, así que cambiar `hombreador` reenvía los destinos, y sin eso cada
 guardado dejaría una generación muerta de filas. Los tarifarios se editan poco y no tienen ese
 problema; una OS se corrige todo el tiempo.
+
+### El costo real lo carga el usuario, y por eso vive en la OS
+
+`OrdenServicio.costo_real` y `OrdenServicio.observaciones` son el importe con el que se factura
+de verdad y por qué difiere del calculado. Existen porque el costeo se está poniendo en
+producción y el resultado teórico todavía se contrasta contra la realidad a mano.
+
+**Van en `OrdenServicio` y no en `CostoOrdenServicio`, y ahí está todo el punto.**
+`replace_costo` da de baja la fila del costo y crea una nueva en cada cálculo —es lo que hace
+seguro recrear la clave de la unique parcial—, así que un dato cargado a mano ahí se perdería en
+el primer *Recalcular*. En la OS sobrevive a cualquier cantidad de recálculos, y hay un test que
+lo fija (`test_recalcular_no_pisa_el_costo_real_cargado_a_mano`).
+
+Tres consecuencias:
+
+- **`costo_real` no entra en `esta_desactualizado`.** No es una entrada del cálculo: cargarlo no
+  deja viejo el costo teórico, y meterlo en la comparación marcaría como desactualizada toda OS
+  con costo real cargado.
+- **El POST del costo no lo toca.** Costear y cargar el costo real son dos acciones distintas,
+  con dos permisos distintos (`calcular_costo` contra `editar`).
+- **No es tri-estado como `destinos`:** omitir `costo_real` en el PUT lo borra, igual que
+  `fecha_viaje`. Es correcto porque el formulario tiene el campo en pantalla y siempre manda su
+  estado real; el `[]`/`None` de `destinos` existe justamente porque ahí el default pelado sí
+  borraba en silencio.
+
+`CostoReal` es un `Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=2)]` y
+`observaciones` lleva `max_length=2000`: los límites son los de la columna, y sin ellos un valor
+fuera de rango sería un `DataError` de Postgres (500) donde tiene que ser un 422 con el `loc` al
+campo. Mismo criterio que `UbicacionCrearIn`.
 
 **`costo_desactualizado` es un detector, no un certificado.** El PUT no recalcula, así que
 `CostoOrdenServicioService.esta_desactualizado` compara lo congelado en el costo contra lo vivo de

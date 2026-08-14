@@ -38,6 +38,14 @@ def orden_in(**extra) -> dict:
     return payload
 
 
+def cargar_costo_real(orden, costo_real: str, observaciones: str):
+    # create_orden_servicio no los recibe: nacen de la ingesta y los carga el usuario después.
+    orden.costo_real = Decimal(costo_real)
+    orden.observaciones = observaciones
+    orden.save(update_fields=["costo_real", "observaciones"])
+    return orden
+
+
 @pytest.fixture
 def usuario_con(crear_usuario, crear_rol, asignar_rol):
     def _crear(*codigos: PermisoCodigo):
@@ -283,6 +291,104 @@ def test_put_con_tipo_camion_invalido_da_payload_invalid(client, usuario_con, cr
 
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "payload_invalid"
+
+
+def test_put_persiste_el_costo_real_y_sus_observaciones(client, usuario_con, crear_orden):
+    orden = crear_orden()
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_EDITAR))
+
+    resp = client.put(
+        detalle(orden.id),
+        orden_in(costo_real="190000.50", observaciones="El transportista cobró la espera"),
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["costo_real"] == "190000.50"
+    assert resp.json()["observaciones"] == "El transportista cobró la espera"
+    orden.refresh_from_db()
+    assert orden.costo_real == Decimal("190000.50")
+
+
+def test_el_costo_real_tambien_viaja_en_el_detalle(client, usuario_con, crear_orden):
+    orden = cargar_costo_real(crear_orden(), "190000.50", "Peaje extra")
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_VER))
+
+    resp = client.get(detalle(orden.id))
+
+    assert resp.status_code == 200
+    assert resp.json()["costo_real"] == "190000.50"
+    assert resp.json()["observaciones"] == "Peaje extra"
+
+
+def test_put_sin_costo_real_lo_limpia(client, usuario_con, crear_orden):
+    orden = cargar_costo_real(crear_orden(), "190000.50", "Peaje extra")
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_EDITAR))
+
+    resp = client.put(detalle(orden.id), orden_in(), content_type="application/json")
+
+    assert resp.status_code == 200
+    orden.refresh_from_db()
+    assert orden.costo_real is None
+    assert orden.observaciones == ""
+
+
+def test_put_con_costo_real_negativo_da_payload_invalid(client, usuario_con, crear_orden):
+    orden = crear_orden()
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_EDITAR))
+
+    resp = client.put(
+        detalle(orden.id), orden_in(costo_real="-1.00"), content_type="application/json"
+    )
+
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "payload_invalid"
+
+
+def test_put_con_costo_real_fuera_de_la_columna_da_payload_invalid(
+    client, usuario_con, crear_orden
+):
+    orden = crear_orden()
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_EDITAR))
+
+    # 13 enteros + 2 decimales no entran en DecimalField(max_digits=14): sin el límite en el
+    # DTO esto sería un DataError de Postgres, o sea un 500.
+    resp = client.put(
+        detalle(orden.id), orden_in(costo_real="1234567890123.45"), content_type="application/json"
+    )
+
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "payload_invalid"
+
+
+def test_put_con_observaciones_larguisimas_da_payload_invalid(client, usuario_con, crear_orden):
+    orden = crear_orden()
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_EDITAR))
+
+    resp = client.put(
+        detalle(orden.id), orden_in(observaciones="x" * 2001), content_type="application/json"
+    )
+
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "payload_invalid"
+
+
+def test_el_costo_real_no_desactualiza_el_costo_calculado(
+    client, usuario_con, crear_orden, crear_costo
+):
+    orden = crear_orden()
+    crear_costo(orden)
+    client.force_login(usuario_con(PermisoCodigo.ORDENES_SERVICIO_EDITAR))
+
+    # tipo_camion=None es lo que congeló crear_costo: así el costo real es lo único que cambia.
+    resp = client.put(
+        detalle(orden.id),
+        orden_in(tipo_camion=None, costo_real="190000.50"),
+        content_type="application/json",
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["costo_desactualizado"] is False
 
 
 def test_ver_no_alcanza_para_editar(client, usuario_con, crear_orden):

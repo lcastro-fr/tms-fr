@@ -31,6 +31,7 @@ class OrdenServicioAdmin(admin.ModelAdmin):
         "tipo_camion",
         "hombreador",
         "facturable",
+        "costo_real",
         "active",
     )
     list_filter = ("active", "tipo_operacion", "via", "tipo_camion", "hombreador", "facturable")

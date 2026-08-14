@@ -21,6 +21,8 @@ class ActualizarOrdenServicioUseCase:
             modalidad=data.modalidad.value if data.modalidad else None,
             hombreador=data.hombreador,
             facturable=data.facturable,
+            costo_real=data.costo_real,
+            observaciones=data.observaciones,
         )
         if data.destinos is not None:
             OrdenServicioService.replace_destinos(orden, [d.ubicacion_id for d in data.destinos])

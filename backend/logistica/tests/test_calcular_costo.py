@@ -105,6 +105,24 @@ def test_los_destinos_del_costo_son_los_resueltos_no_los_crudos(
     assert costo.cantidad_destinos == 1
 
 
+def test_recalcular_no_pisa_el_costo_real_cargado_a_mano(crear_orden, crear_ubicacion, tarifario):
+    """Es la razón de que costo_real viva en OrdenServicio y no en CostoOrdenServicio."""
+    orden = crear_orden(tipo_camion=TipoCamion.SEMI.value)
+    destino = crear_ubicacion("CL600")
+    OrdenServicioService.replace_destinos(orden, [destino.id])
+    tarifa_por_ubicacion(tarifario, destino, "92000.00", ModalidadFlete.DIRECTO)
+    orden.costo_real = Decimal("99000.00")
+    orden.observaciones = "Se pagó el adicional de descarga"
+    orden.save(update_fields=["costo_real", "observaciones"])
+
+    CalcularCostoOrdenServicioUseCase.execute(orden.id)
+    CalcularCostoOrdenServicioUseCase.execute(orden.id)
+
+    orden.refresh_from_db()
+    assert orden.costo_real == Decimal("99000.00")
+    assert orden.observaciones == "Se pagó el adicional de descarga"
+
+
 def test_una_os_no_facturable_no_se_costea(crear_orden, tarifario):
     orden = crear_orden(facturable=False, tipo_camion=TipoCamion.SEMI.value)
 

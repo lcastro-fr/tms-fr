@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import TYPE_CHECKING, Self
+from decimal import Decimal
+from typing import TYPE_CHECKING, Annotated, Self
 
-from pydantic import AwareDatetime, BaseModel
+from pydantic import AwareDatetime, BaseModel, Field
 
 from catalog.dtos import UbicacionOpcionOut
 from catalog.enums import TipoCamion
@@ -46,6 +47,9 @@ class OrdenServicioDestinoIn(BaseModel):
     ubicacion_id: int
 
 
+CostoReal = Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=2)]
+
+
 class OrdenServicioIn(BaseModel):
     fecha_viaje: AwareDatetime | None = None
     tipo_operacion: TipoOperacion
@@ -54,6 +58,8 @@ class OrdenServicioIn(BaseModel):
     modalidad: ModalidadFlete | None = None
     hombreador: bool = False
     facturable: bool = False
+    costo_real: CostoReal | None = None
+    observaciones: str = Field("", max_length=2000)
     destinos: list[OrdenServicioDestinoIn] | None = None
 
 
@@ -159,6 +165,8 @@ class OrdenServicioOut(BaseModel):
     modalidad: str | None
     hombreador: bool
     facturable: bool
+    costo_real: Decimal | None
+    observaciones: str
     active: bool
     costo: CostoOrdenServicioOut | None = None
     tickets: list[TicketOut] = []
@@ -188,6 +196,8 @@ class OrdenServicioOut(BaseModel):
             modalidad=orden.modalidad,
             hombreador=orden.hombreador,
             facturable=orden.facturable,
+            costo_real=orden.costo_real,
+            observaciones=orden.observaciones,
             active=orden.active,
             costo=CostoOrdenServicioOut.from_model(costo) if costo else None,
             tickets=tickets or [],

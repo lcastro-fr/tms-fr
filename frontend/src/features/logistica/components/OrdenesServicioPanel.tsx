@@ -8,7 +8,12 @@ import {
 } from "@mantine/core";
 import { DateRangePicker } from "../../../components/DateRangePicker";
 import { useDebouncedValue } from "@mantine/hooks";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { notifications } from "@mantine/notifications";
+import {
+    useMutation,
+    useQueryClient,
+    useSuspenseQuery,
+} from "@tanstack/react-query";
 import {
     Suspense,
     lazy,
@@ -18,10 +23,14 @@ import {
     useState,
 } from "react";
 
+import type { ApiError } from "../../../api/errors";
 import { DataTableExpandible } from "../../../components/DataTableExpandible";
+import { formatearPesos } from "../../../lib/money";
 import { usePermisos } from "../../auth";
 import {
+    calcularCostoOrdenServicio,
     opcionesOrdenServicioQueryOptions,
+    ordenesServicioKeys,
     ordenesServicioQueryOptions,
 } from "../api";
 import type { OrdenServicioOut, OrdenesServicioSeleccion } from "../api";
@@ -48,6 +57,7 @@ export function OrdenesServicioPanel({
     onFiltersChange,
 }: Props) {
     const { can } = usePermisos();
+    const queryClient = useQueryClient();
     const { data: ordenes } = useSuspenseQuery(
         ordenesServicioQueryOptions(filters),
     );
@@ -60,6 +70,35 @@ export function OrdenesServicioPanel({
         () => ordenes.filter((o) => o.costo === null).length,
         [ordenes],
     );
+
+    const calcular = useMutation({
+        mutationFn: (orden: OrdenServicioOut) =>
+            calcularCostoOrdenServicio(orden.id),
+        onSuccess: (costo, orden) => {
+            void queryClient.invalidateQueries({
+                queryKey: ordenesServicioKeys.all,
+            });
+            notifications.show({
+                color: "green",
+                message: `Costo de la OS ${orden.id}: ${formatearPesos(costo.total)}`,
+            });
+        },
+        onError: (error: ApiError, orden) => {
+            if (error.code === "not_found") {
+                void queryClient.invalidateQueries({
+                    queryKey: ordenesServicioKeys.all,
+                });
+            }
+            notifications.show({
+                color: "red",
+                autoClose: false,
+                title: `No se pudo calcular el costo de la OS ${orden.id}`,
+                message: error.message,
+            });
+        },
+    });
+
+    const calculandoId = calcular.isPending ? calcular.variables.id : null;
 
     const etiqueta = useCallback(
         (
@@ -76,10 +115,13 @@ export function OrdenesServicioPanel({
         () =>
             ordenesServicioColumns({
                 onEditar: setEditando,
+                onCalcular: calcular.mutate,
                 puedeEditar: can("ordenes_servicio.editar"),
+                puedeCalcular: can("ordenes_servicio.calcular_costo"),
+                calculandoId,
                 etiqueta,
             }),
-        [can, etiqueta],
+        [can, calcular.mutate, calculandoId, etiqueta],
     );
 
     const [busqueda, setBusqueda] = useState(seleccion.numero ?? "");
@@ -180,7 +222,9 @@ export function OrdenesServicioPanel({
                 columns={columns}
                 data={ordenes}
                 getRowId={(orden) => String(orden.id)}
-                expandido={(orden) => <TicketsDeOrden tickets={orden.tickets} />}
+                expandido={(orden) => (
+                    <TicketsDeOrden tickets={orden.tickets} />
+                )}
                 puedeExpandir={(orden) => orden.tickets.length > 0}
                 vacio="Ninguna orden de servicio coincide con los filtros puestos."
                 buscador="Filtrar lo cargado: OS, ticket, origen o transportista"
