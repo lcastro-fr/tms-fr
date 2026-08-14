@@ -158,6 +158,7 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
                     {problema && (
                         <Alert
                             color="red"
+                            variant="outline"
                             title="No se pudo completar la operación"
                         >
                             {problema.message}
@@ -336,6 +337,7 @@ export function OrdenServicioFormModal({ orden, onClose }: Props) {
                             {costoViejo && (
                                 <Alert
                                     color="orange"
+                                    variant="outline"
                                     title="El costo guardado quedó viejo"
                                 >
                                     Los datos de la OS cambiaron después del
