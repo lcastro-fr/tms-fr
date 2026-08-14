@@ -1,0 +1,92 @@
+/* El bloque de marca ocupa el ancho de la navbar para leerse como su remate superior. */
+.marca {
+    display: flex;
+    align-items: center;
+    gap: var(--mantine-spacing-xs);
+    height: 100%;
+    padding-inline: var(--mantine-spacing-md);
+    color: inherit;
+    text-decoration: none;
+}
+
+@media (min-width: $mantine-breakpoint-sm) {
+    .marca {
+        width: 240px;
+        border-inline-end: 1px solid
+            light-dark(
+                var(--mantine-color-gray-3),
+                var(--mantine-color-dark-4)
+            );
+    }
+}
+
+.sello {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--mantine-radius-sm);
+    /* -contrast sólo existe para el primario: Mantine no lo emite por color suelto. */
+    background: var(--mantine-primary-color-filled);
+    color: var(--mantine-primary-color-contrast);
+    font-family: var(--mantine-font-family-monospace);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.nombre {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.seccion {
+    padding-inline: var(--mantine-spacing-sm);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* La regla dorada reemplaza al relleno tintado: un solo elemento dice "estás acá". */
+.item[data-active] {
+    background-color: transparent;
+    box-shadow: inset 3px 0 0 var(--mantine-primary-color-filled);
+    font-weight: 600;
+}
+
+.item[data-active]:hover {
+    background-color: var(--mantine-color-default-hover);
+}
+
+.usuario {
+    display: flex;
+    align-items: center;
+    gap: var(--mantine-spacing-xs);
+    padding: 4px 8px;
+    border-radius: var(--mantine-radius-sm);
+}
+
+.usuario:hover {
+    background-color: var(--mantine-color-default-hover);
+}
+
+/* El skip link sólo existe para el teclado: invisible hasta que recibe el foco. */
+.saltar {
+    position: fixed;
+    top: var(--mantine-spacing-xs);
+    left: var(--mantine-spacing-xs);
+    z-index: 400;
+    padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+    border-radius: var(--mantine-radius-sm);
+    background: var(--mantine-color-body);
+    color: var(--mantine-color-text);
+    box-shadow: var(--mantine-shadow-md);
+    transform: translateY(-200%);
+}
+
+.saltar:focus-visible {
+    transform: none;
+}

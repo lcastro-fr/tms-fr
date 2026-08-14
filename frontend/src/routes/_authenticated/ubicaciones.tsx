@@ -1,4 +1,5 @@
 import { Stack, Title } from "@mantine/core";
+import { useDocumentTitle } from "@mantine/hooks";
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
 
 import { requirePermiso } from "../../features/auth";
@@ -10,6 +11,7 @@ function booleano(valor: unknown): boolean | undefined {
 }
 
 function Ubicaciones() {
+    useDocumentTitle("Ubicaciones · Fletes");
     const filters = Route.useSearch();
     const navigate = Route.useNavigate();
 

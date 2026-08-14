@@ -50,12 +50,14 @@ export function zonasColumns({
             // Numérico y no accessorKey: sobre el string del Decimal el orden sería lexicográfico.
             accessorFn: (zona) => Number(zona.superficie_km2),
             enableGlobalFilter: false,
+            meta: { numerico: true },
             cell: ({ row }) => formatearKm2(row.original.superficie_km2),
         },
         {
             id: "vertices",
             header: "Vértices",
             enableSorting: false,
+            meta: { numerico: true },
             cell: ({ row }) => verticesDistintos(row.original.geom),
         },
         {

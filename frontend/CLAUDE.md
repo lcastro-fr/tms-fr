@@ -37,7 +37,7 @@ que es máquina a máquina; le falta API de lectura.
 
 ```
 src/
-  app/         providers, theme, router, queryClient. Se arma una vez y no se toca.
+  app/         providers, theme, router, queryClient, navegacion. Configuración del shell.
   api/         schema.d.ts (generado), http.ts, errors.ts. Único lugar con axios.
   features/    una carpeta por app del backend
     catalog/         zonas, ubicaciones
@@ -185,6 +185,19 @@ Redirigir ahí loopea.
 El redirect se registra con `setOnUnauthorized` desde `main.tsx` y no se importa el router
 en `http.ts`: eso cerraría el ciclo `router → routes → features → api → router`.
 
+**El handler tiene que ser idempotente, y hay dos guards que lo hacen.** Un loader que dispara
+dos requests —`/ordenes-servicio` pide la lista y las opciones— da **dos 401**, y el handler
+corre dos veces. La segunda vez el router ya está en `/login`, así que guardaba
+`next=/login?next=…`: entrar bien te devolvía al login. Y como ese `next` anidado queda en la
+URL, el intento siguiente desde esa misma URL volvía a fallar.
+
+- `main.tsx` corta si `router.state.location.pathname === "/login"`: no se anida el `next`.
+- El `validateSearch` de `/login` descarta un `next` que empiece con `/login`. Este es el que
+  **despega a un usuario ya trabado**, porque limpia la URL que quedó guardada.
+
+Está reproducido con Chrome headless entrando a `/login?next=%2Flogin%3Fnext%3D%252F`: sin el
+segundo guard, el login exitoso termina en `/login`.
+
 ## Data fetching
 
 - Cada feature exporta **factories de `queryOptions`**, no hooks sueltos: es lo que
@@ -279,6 +292,17 @@ en `http.ts`: eso cerraría el ciclo `router → routes → features → api →
   precio es conocimiento de dominio.
 - El formateo pasa en la `cell`, usando `lib/money.ts` y `lib/date.ts`. Una columna de
   precio recibe el string del `Decimal`, nunca un número.
+- **Las dos tablas van con `font-variant-numeric: tabular-nums`** (`tabla.module.css`, el único
+  módulo compartido por `DataTable`, `DataTableExpandible` y `EncabezadoTabla`). Sin cifras
+  tabulares los dígitos tienen anchos distintos y las comas de una columna de pesos no comparten
+  vertical, que es justo lo que hay que poder barrer de un vistazo.
+- **Alinear a la derecha se declara con `meta: { numerico: true }` en la column def**, y las
+  tablas lo leen para poner la clase en el `<th>` y en el `<td>`. Va por `meta` y no por una
+  lista de ids en `components/`: qué columna es un número es conocimiento de dominio, y
+  `components/` no lo tiene. El `<th>` ordenable además pasa su `Group` a `justify="flex-end"`,
+  porque el botón es `display: block; width: 100%`.
+- **Sin el alineado a la derecha las cifras tabulares no se notan.** Es el par lo que hace que
+  `$ 1.185.000,00` y `$ 94.500,50` compartan la coma; una sola de las dos mitades no alcanza.
 - **Hoy todo es client-side** (`getSortedRowModel`, `getFilteredRowModel`,
   `getPaginationRowModel`). Es correcto: la API no tiene paginación ni filtros y
   `list[ZonaOut]` es el array completo.
@@ -593,6 +617,44 @@ Los archivos de test cubren exactamente lo que es silencioso cuando se rompe:
 `getContext()` devuelve `null` y muere en `clearRect`. Por eso el error de `classList` de
 `preferCanvas` no se reproduce headless aunque su mecanismo esté entendido. Estos tests cubren
 el cableado, no el render.
+
+## El shell y la navegación
+
+- **`/` no es una pantalla: es un despachador.** Su `beforeLoad` redirige a la primera pantalla
+  que la sesión puede ver, en el orden de `NAV`. Sólo **renderiza** —un `<Alert>` de "no tenés
+  acceso a ninguna pantalla"— cuando el usuario no tiene ningún `*.ver`.
+- **Y ese caso es el que corta un loop, no un adorno.** `requirePermiso` hace
+  `redirect({ to: "/" })` y `login.tsx` navega a `next ?? "/"`: si `/` redirigiera siempre, un
+  usuario sin permisos rebotaría entre las dos rutas para siempre. Por eso la cascada termina
+  cayendo al componente en vez de a un quinto redirect.
+- **Los destinos de esa cascada van literales, no derivados de `NAV`.** Así cada
+  `redirect({ to })` queda tipado contra su ruta, que con una unión de strings pelea
+  (`/ordenes-servicio` tiene `validateSearch`). El precio es que el orden está escrito dos veces:
+  si divergen del manifiesto, es un bug.
+- **El manifiesto de navegación vive en `app/navegacion.ts`.** Es configuración del shell, como
+  `theme.ts` y `router.tsx`, y lo consumen la navbar y (en orden) el despachador. Es un módulo
+  hoja —sólo el tipo `PermisoCodigo` y los iconos— así que no cierra ciclo con `app/router.tsx`.
+- **Los ítems están agrupados en "Operación" y "Datos maestros", y la división es real.** Órdenes
+  de servicio es el trabajo transaccional del día; zonas, ubicaciones y tarifarios son datos de
+  referencia que alimentan el costeo. **Un grupo sin ítems visibles no renderiza su label**: con
+  sólo `tarifarios.ver` quedaría un encabezado "Operación" vacío.
+- **El activo se marca con una barra dorada y no con el relleno tintado de Mantine.** Es
+  `box-shadow: inset` sobre el `data-active` del `NavLink`. En una app de tablas el tinte compite
+  con las filas rayadas; la barra no.
+- **El bloque de usuario va en el header y no al pie de la navbar.** Abajo de `sm` la navbar
+  colapsa, y ahí adentro "Cerrar sesión" desaparecería detrás del burger.
+- **El skip link es el primer nodo del DOM, antes del `AppShell`.** Adentro de `AppShell.Main`
+  sería el último y no serviría para nada, que es exactamente el bug que viene a evitar.
+- **El primario efectivo es el shade 8 en claro y el 4 en oscuro, con `autoContrast`.** El shade 6
+  (`#a98d60`) da 3,15:1 sobre blanco: no llega a AA para texto, y una etiqueta blanca sobre un
+  botón dorado tampoco. El 8 (`#846c44`) da 4,99:1 y el 4 (`#b8a17f`) 6,24:1 sobre el fondo
+  oscuro. Como fondo el dorado se ve casi igual; lo que cambia es el texto.
+- **Cada ruta de dominio pone su `document.title` con `useDocumentTitle`** de `@mantine/hooks`,
+  que ya estaba instalado. Antes las cinco pestañas decían `Fletes` y no se distinguían.
+- **`--mantine-color-gold-contrast` no existe.** Mantine emite `-contrast` sólo para los
+  *virtual colors*; para un color suelto emite `-filled`, `-light`, `-outline` y compañía. Como
+  gold **es** el primario, la variable correcta es `--mantine-primary-color-contrast`. Usar la
+  otra no rompe nada visible: el color simplemente se hereda, en silencio.
 
 ## Pendientes conocidos
 

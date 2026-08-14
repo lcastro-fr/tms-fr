@@ -6,6 +6,7 @@ import type { Header, SortDirection } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 
 import styles from "./EncabezadoTabla.module.css";
+import tabla from "./tabla.module.css";
 
 const ARIA_SORT = { asc: "ascending", desc: "descending" } as const;
 
@@ -20,20 +21,29 @@ type Props<T> = {
 export function EncabezadoTabla<T>({ header }: Props<T>) {
     const columna = header.column;
     const contenido = flexRender(columna.columnDef.header, header.getContext());
+    const numerico = columna.columnDef.meta?.numerico === true;
+    const clase = numerico ? tabla.numerico : undefined;
 
     if (!columna.getCanSort()) {
-        return <Table.Th>{contenido}</Table.Th>;
+        return <Table.Th className={clase}>{contenido}</Table.Th>;
     }
 
     const orden = columna.getIsSorted();
 
     return (
-        <Table.Th aria-sort={orden ? ARIA_SORT[orden] : "none"}>
+        <Table.Th
+            aria-sort={orden ? ARIA_SORT[orden] : "none"}
+            className={clase}
+        >
             <UnstyledButton
                 className={styles.boton}
                 onClick={columna.getToggleSortingHandler()}
             >
-                <Group gap={4} wrap="nowrap">
+                <Group
+                    gap={4}
+                    wrap="nowrap"
+                    justify={numerico ? "flex-end" : undefined}
+                >
                     {contenido}
                     <IconoOrden orden={orden} />
                 </Group>

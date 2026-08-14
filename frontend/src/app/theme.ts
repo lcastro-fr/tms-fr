@@ -23,6 +23,16 @@ const GOLD: CustomColor = {
 
 export const theme = createTheme({
     primaryColor: GOLD.key,
+    autoContrast: true,
+    defaultRadius: "md",
+    headings: {
+        fontWeight: "600",
+        sizes: {
+            h2: { fontSize: "1.5rem", lineHeight: "1.3" },
+            h3: { fontSize: "1.25rem", lineHeight: "1.35" },
+            h4: { fontSize: "1.0625rem", lineHeight: "1.4" },
+        },
+    },
     colors: {
         [GOLD.key]: GOLD.colors,
     },

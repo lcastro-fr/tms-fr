@@ -1,0 +1,9 @@
+/* Cifras tabulares: sin esto los dígitos tienen anchos distintos y las comas de una columna
+   de pesos no comparten vertical. Sólo afecta números, el texto queda igual. */
+.tabla {
+    font-variant-numeric: tabular-nums;
+}
+
+.numerico {
+    text-align: right;
+}

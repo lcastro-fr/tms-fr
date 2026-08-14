@@ -30,8 +30,13 @@ function LoginPage() {
 }
 
 export const Route = createFileRoute("/login")({
+    // Un next que apunta al propio /login manda de vuelta acá después de entrar, y como queda
+    // en la URL el bucle se repite en cada intento. Descartarlo es lo que despega al usuario.
     validateSearch: (search: Record<string, unknown>): LoginSearch => ({
-        next: typeof search.next === "string" ? search.next : undefined,
+        next:
+            typeof search.next === "string" && !search.next.startsWith("/login")
+                ? search.next
+                : undefined,
     }),
     loader: () => bootstrapCsrf(),
     component: LoginPage,

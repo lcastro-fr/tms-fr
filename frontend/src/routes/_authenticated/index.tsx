@@ -1,26 +1,53 @@
-import { Code, List, Stack, Text, Title } from "@mantine/core";
-import { createFileRoute } from "@tanstack/react-router";
+import { Alert, Center, Stack, Text } from "@mantine/core";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { usePermisos } from "../../features/auth";
 
-function Inicio() {
+// Es el aterrizaje de requirePermiso, que hace redirect({ to: "/" }): si esta ruta
+// redirigiera siempre, un usuario sin permisos rebotaría entre las dos para siempre.
+function SinAcceso() {
     const { sesion } = usePermisos();
 
     return (
-        <Stack gap="xs">
-            <Title order={2}>Inicio</Title>
-            <Text c="dimmed">
-                Sesión de {sesion.email}. Roles: {sesion.roles.join(", ") || "ninguno"}.
-            </Text>
-            <List size="sm">
-                {sesion.permisos.map((permiso) => (
-                    <List.Item key={permiso}>
-                        <Code>{permiso}</Code>
-                    </List.Item>
-                ))}
-            </List>
-        </Stack>
+        <Center mih="60vh">
+            <Alert
+                variant="outline"
+                color="yellow"
+                title="No tenés acceso a ninguna pantalla"
+                maw={520}
+            >
+                <Stack gap="xs">
+                    <Text size="sm">
+                        Tu usuario ({sesion.email}) no tiene ningún permiso
+                        asignado.
+                    </Text>
+                    <Text size="sm">
+                        Pedile a un administrador que te asigne un rol.
+                    </Text>
+                </Stack>
+            </Alert>
+        </Center>
     );
 }
 
-export const Route = createFileRoute("/_authenticated/")({ component: Inicio });
+export const Route = createFileRoute("/_authenticated/")({
+    // La cascada sigue el orden de NAV. Los destinos van literales y no derivados del
+    // manifiesto para que cada redirect quede tipado contra su ruta.
+    beforeLoad: ({ context }) => {
+        const { permisos } = context.sesion;
+
+        if (permisos.includes("ordenes_servicio.ver")) {
+            throw redirect({ to: "/ordenes-servicio" });
+        }
+        if (permisos.includes("zonas.ver")) {
+            throw redirect({ to: "/zonas" });
+        }
+        if (permisos.includes("ubicaciones.ver")) {
+            throw redirect({ to: "/ubicaciones" });
+        }
+        if (permisos.includes("tarifarios.ver")) {
+            throw redirect({ to: "/tarifarios" });
+        }
+    },
+    component: SinAcceso,
+});

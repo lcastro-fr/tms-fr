@@ -1,6 +1,7 @@
 import { Group, Pagination, Table, Text, Box } from "@mantine/core";
 import type {
     ColumnDef,
+    RowData,
     RowSelectionState,
     SortingState,
 } from "@tanstack/react-table";
@@ -17,9 +18,18 @@ import { useState } from "react";
 import { BuscadorTabla } from "./BuscadorTabla";
 import { EncabezadoTabla } from "./EncabezadoTabla";
 import { filtroGlobalTexto } from "./filtro-global";
+import tabla from "./tabla.module.css";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 export type ColumnDefs<T> = ColumnDef<T, any>[];
+
+// Alinear a la derecha es dato de la columna, no de la tabla: components/ no conoce dominio.
+declare module "@tanstack/react-table" {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    interface ColumnMeta<TData extends RowData, TValue> {
+        numerico?: boolean;
+    }
+}
 
 type Props<T> = {
     columns: ColumnDefs<T>;
@@ -102,7 +112,7 @@ export function DataTable<T>({
                 </Group>
             )}
 
-            <Table striped highlightOnHover>
+            <Table striped highlightOnHover className={tabla.tabla}>
                 <Table.Thead>
                     {table.getHeaderGroups().map((grupo) => (
                         <Table.Tr key={grupo.id}>
@@ -121,12 +131,19 @@ export function DataTable<T>({
                             key={row.id}
                             bg={
                                 row.getIsSelected()
-                                    ? "var(--mantine-color-gold-light"
+                                    ? "var(--mantine-color-gold-light)"
                                     : undefined
                             }
                         >
                             {row.getVisibleCells().map((cell) => (
-                                <Table.Td key={cell.id}>
+                                <Table.Td
+                                    key={cell.id}
+                                    className={
+                                        cell.column.columnDef.meta?.numerico
+                                            ? tabla.numerico
+                                            : undefined
+                                    }
+                                >
                                     {flexRender(
                                         cell.column.columnDef.cell,
                                         cell.getContext(),

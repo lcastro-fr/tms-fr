@@ -1,5 +1,6 @@
 import { ActionIcon, useComputedColorScheme, useMantineColorScheme } from "@mantine/core";
-import { Moon, Sun } from "@phosphor-icons/react";
+import { Moon } from "@phosphor-icons/react/Moon";
+import { Sun } from "@phosphor-icons/react/Sun";
 
 export function ColorSchemeToggle() {
     const { setColorScheme } = useMantineColorScheme();

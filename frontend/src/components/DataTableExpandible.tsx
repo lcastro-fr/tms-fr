@@ -17,6 +17,7 @@ import { BuscadorTabla } from "./BuscadorTabla";
 import type { ColumnDefs } from "./DataTable";
 import { EncabezadoTabla } from "./EncabezadoTabla";
 import { filtroGlobalTexto } from "./filtro-global";
+import tabla from "./tabla.module.css";
 
 type Props<T> = {
     columns: ColumnDefs<T>;
@@ -101,7 +102,7 @@ export function DataTableExpandible<T>({
                 </Group>
             )}
 
-            <Table striped highlightOnHover>
+            <Table striped highlightOnHover className={tabla.tabla}>
                 <Table.Thead>
                     {table.getHeaderGroups().map((grupo) => (
                         <Table.Tr key={grupo.id}>
@@ -149,7 +150,14 @@ export function DataTableExpandible<T>({
                                     )}
                                 </Table.Td>
                                 {row.getVisibleCells().map((cell) => (
-                                    <Table.Td key={cell.id}>
+                                    <Table.Td
+                                        key={cell.id}
+                                        className={
+                                            cell.column.columnDef.meta?.numerico
+                                                ? tabla.numerico
+                                                : undefined
+                                        }
+                                    >
                                         {flexRender(
                                             cell.column.columnDef.cell,
                                             cell.getContext(),

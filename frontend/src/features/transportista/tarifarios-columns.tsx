@@ -39,8 +39,18 @@ export function tarifariosColumns({
             enableGlobalFilter: false,
             cell: ({ row }) => formatearFecha(row.original.vigente_hasta, "Sin cierre"),
         },
-        { accessorKey: "cantidad_fletes", header: "Fletes", enableGlobalFilter: false },
-        { accessorKey: "cantidad_conceptos", header: "Conceptos", enableGlobalFilter: false },
+        {
+            accessorKey: "cantidad_fletes",
+            header: "Fletes",
+            enableGlobalFilter: false,
+            meta: { numerico: true },
+        },
+        {
+            accessorKey: "cantidad_conceptos",
+            header: "Conceptos",
+            enableGlobalFilter: false,
+            meta: { numerico: true },
+        },
         {
             id: "estado",
             header: "Estado",

@@ -132,6 +132,7 @@ export function ordenesServicioColumns({
             accessorFn: (orden) =>
                 orden.costo ? Number(orden.costo.total) : -1,
             enableGlobalFilter: false,
+            meta: { numerico: true },
             cell: ({ row }) =>
                 row.original.costo ? (
                     <Text size="sm" fw={500}>
@@ -149,6 +150,7 @@ export function ordenesServicioColumns({
             accessorFn: (orden) =>
                 orden.costo_real ? Number(orden.costo_real) : -1,
             enableGlobalFilter: false,
+            meta: { numerico: true },
             cell: ({ row }) =>
                 row.original.costo_real ? (
                     <Text size="sm" fw={500}>

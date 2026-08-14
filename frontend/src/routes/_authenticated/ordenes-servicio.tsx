@@ -1,4 +1,5 @@
 import { Stack, Title } from "@mantine/core";
+import { useDocumentTitle } from "@mantine/hooks";
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
 
 import { requirePermiso } from "../../features/auth";
@@ -26,6 +27,7 @@ function dia(valor: unknown, porDefecto: string): string {
 }
 
 function OrdenesServicio() {
+    useDocumentTitle("Órdenes de servicio · Fletes");
     const filters = Route.useSearch();
     const navigate = Route.useNavigate();
 

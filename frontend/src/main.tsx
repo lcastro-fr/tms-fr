@@ -19,6 +19,9 @@ if (!rootElement) {
 
 setOnUnauthorized(() => {
     queryClient.clear();
+    if (router.state.location.pathname === "/login") {
+        return;
+    }
     void router.navigate({
         to: "/login",
         search: { next: router.state.location.href },
